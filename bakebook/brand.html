@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>bakebook — brand style tile</title>
+  <!-- Google Fonts: Fraunces (vintage serif) + Nunito (friendly rounded sans) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Bitter:wght@500;600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* ============================================================
+       PROPOSED brand tokens — a first draft to react to.
+       (These are NOT wired into the app yet — this page is a sample.)
+       ============================================================ */
+    :root {
+      /* neutrals — warm creams */
+      --paper:      #F8F1E4;   /* page background */
+      --card:       #FFFCF7;   /* cards & inputs */
+      --cream:      #F5EDDD;   /* subtle surfaces */
+      --butter-pale:#F0E6C8;   /* pale butter yellow */
+      --tan:        #DFC7AC;   /* warm tan */
+
+      /* accents — terracotta family */
+      --clay:       #CE9585;   /* dusty rose */
+      --terracotta: #BE6F5D;   /* accent hue — icons, borders, highlights */
+      --terracotta-deep:#A5533F;/* buttons, links, text on cream (legible) */
+
+      /* darks & butter */
+      --mauve:      #BEB0AB;
+      --brown:      #4A4038;   /* dark buttons */
+      --espresso:   #25190F;   /* deepest brown — use sparingly */
+      --ink:        #3A2A20;   /* body text — deep brown, the app default */
+      --heading:    #33241A;   /* headings — richer deep brown (never black) */
+      --muted:      #8a6f52;   /* secondary text */
+      --butter:     #FDF6D1;   /* butter — from her own logo */
+      --butter-deep:#EFE3A6;   /* butter edge/shadow */
+      --butter-blue:#67ACEC;   /* butter's blue — accent only */
+      --butter-blue-deep:#4E93D8;
+
+      /* type */
+      --display: "Fraunces", Georgia, "Palatino", serif;
+      --body: "Nunito", -apple-system, "Segoe UI", sans-serif;
+
+      --radius: 16px;
+      --pill: 999px;
+      --shadow: 0 1px 2px rgba(58,42,32,.05), 0 8px 22px rgba(58,42,32,.07);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 2.5rem 1.25rem 4rem;
+      background: var(--paper); color: var(--ink);
+      font-family: var(--body);
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+      line-height: 1.5;
+    }
+    .wrap { max-width: 820px; margin: 0 auto; }
+
+    /* ---- header ---- */
+    .wordmark {
+      font-family: var(--body);
+      font-weight: 800; font-size: clamp(2.6rem, 8vw, 3.7rem);
+      letter-spacing: -1.5px; color: var(--heading); margin: 0;
+    }
+    /* wordmark studies */
+    .wm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px,1fr)); gap: .9rem; }
+    .wm-card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.5rem 1.4rem; }
+    .wm { font-size: 2.5rem; color: var(--heading); line-height: 1.1; }
+    .wm.signature { font-family: var(--body); font-weight: 800; letter-spacing: -1.5px; color: var(--heading); }
+    .oo { display: inline; white-space: nowrap; }
+    /* butter pats: organic (not perfect circles), flat fill, a happy butter eye inside each */
+    .pat { display: inline-block; width: .6em; height: .6em;
+      border-radius: 46% 54% 52% 48% / 55% 47% 53% 45%;   /* lopsided = hand-drawn */
+      border: .075em solid var(--butter-blue);
+      background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3.6 5 Q6 8 8.4 5' fill='none' stroke='%235F93C4' stroke-width='1.7' stroke-linecap='round'/%3E%3C/svg%3E") center 60%/58% no-repeat,
+        var(--butter);
+      vertical-align: -.01em; margin: 0 .02em;
+      transform: rotate(-5deg);
+      filter: url(#wobble); }                               /* subtle hand-drawn wobble */
+    .pat + .pat { border-radius: 53% 47% 45% 55% / 48% 56% 44% 52%; transform: rotate(6deg); }
+    .tagline { font-style: italic; color: var(--muted); margin: .25rem 0 0;
+      font-family: var(--display); font-size: 1.15rem; }
+
+    /* ---- section scaffold ---- */
+    section { margin-top: 3rem; }
+    .label { font-family: var(--body); font-weight: 800; text-transform: uppercase;
+      letter-spacing: 1.5px; font-size: .72rem; color: var(--terracotta);
+      margin: 0 0 1rem; }
+
+    /* ---- swatches ---- */
+    .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap: .75rem; }
+    .compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px,1fr)); gap: .9rem; }
+    .sw { border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); background: var(--card); }
+    .sw .chip { height: 74px; }
+    .sw .meta { padding: .55rem .7rem .7rem; }
+    .sw .role { font-weight: 700; font-size: .85rem; }
+    .sw .hex { font-size: .75rem; color: var(--muted); font-family: ui-monospace, monospace; }
+
+    /* ---- type specimens ---- */
+    .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.4rem 1.5rem; }
+    h2.spec { font-family: var(--display); font-weight: 600; color: var(--heading);
+      margin: .2rem 0; font-size: 1.9rem; letter-spacing: -.4px; }
+    h3.spec { font-family: var(--display); font-weight: 500; color: var(--heading);
+      margin: .2rem 0; font-size: 1.35rem; }
+    .body-spec { font-size: 1rem; color: var(--ink); }
+    .note { font-size: .8rem; color: var(--muted); margin-top: .4rem; }
+
+    /* ---- buttons ---- */
+    .row { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; }
+    button { font-family: var(--body); font-weight: 700; font-size: 1rem;
+      border: none; border-radius: var(--pill); padding: .7rem 1.5rem; cursor: pointer;
+      transition: transform .05s ease, background .15s ease; }
+    button:active { transform: translateY(1px); }
+    .btn-primary { background: var(--terracotta-deep); color: #FFF9F0; }
+    .btn-primary:hover { background: #8F4634; }
+    .btn-dark { background: var(--brown); color: var(--butter-pale); }
+    .btn-ghost { background: transparent; color: var(--terracotta);
+      border: 2px solid var(--terracotta); }
+
+    /* ---- inputs (cream fill, dark rounded outline) ---- */
+    .field { display: flex; align-items: center; gap: .6rem; background: var(--card);
+      border: 2px solid var(--brown); border-radius: var(--pill);
+      padding: .65rem 1.1rem; max-width: 360px; }
+    .field input { border: none; background: transparent; outline: none; flex: 1;
+      font-family: var(--body); font-size: 1rem; color: var(--ink); }
+    .field input::placeholder { color: var(--muted); font-style: italic; }
+
+    /* ---- a sample recipe card in-context ---- */
+    .recipe { display: flex; gap: 1rem; align-items: center; background: var(--card);
+      border-radius: var(--radius); box-shadow: var(--shadow); padding: 1rem; text-decoration: none; color: inherit; }
+    .recipe .thumb { width: 74px; height: 74px; border-radius: 12px; flex: none;
+      background: linear-gradient(135deg, var(--butter-pale), var(--tan)); display: grid; place-items: center; font-size: 2rem; }
+    .recipe .rname { font-family: var(--display); font-weight: 600; font-size: 1.3rem; color: var(--heading); margin: 0; }
+    .recipe .rdesc { color: var(--muted); font-size: .9rem; margin: .15rem 0 0; }
+    .chip-tag { display: inline-block; background: var(--cream); color: var(--terracotta-deep);
+      border: 1px solid var(--tan); border-radius: var(--pill); padding: .15rem .7rem; font-size: .78rem; font-weight: 700; margin-top: .4rem; }
+
+    /* ---- butter the character ---- */
+    .butter-row { display: flex; gap: 1rem; align-items: center; }
+    .butter-face { width: 66px; height: 44px; border-radius: 12px; flex: none;
+      background: var(--butter); border: 2.5px solid var(--butter-blue);
+      display: grid; place-items: center; box-shadow: var(--shadow); }
+    .butter-face svg { display: block; }
+    .butter-logo { display: inline-block; vertical-align: middle; flex: none;
+      filter: drop-shadow(0 2px 4px rgba(58,42,32,.12)); }
+    .butter-bubble { background: var(--butter); color: var(--espresso);
+      border: 1.5px solid var(--butter-deep);
+      padding: .8rem 1.1rem; border-radius: 16px 16px 16px 4px; max-width: 420px; }
+    .butter-bar { display: flex; align-items: center; gap: .7rem; background: var(--card);
+      border: 2px solid var(--butter-blue); border-radius: var(--pill); padding: .55rem .6rem .55rem 1rem; max-width: 460px; }
+    .butter-bar span { color: var(--muted); font-style: italic; flex: 1; }
+    .butter-send { background: var(--butter-blue-deep); color: #fff; border-radius: var(--pill);
+      width: 38px; height: 38px; display: grid; place-items: center; font-weight: 800; }
+  </style>
+</head>
+<body>
+  <!-- SVG filter that gives the butter pats a hand-drawn, wobbly edge -->
+  <svg width="0" height="0" aria-hidden="true" style="position:absolute">
+    <filter id="wobble">
+      <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="7" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.2" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </svg>
+
+  <div class="wrap">
+
+    <header>
+      <h1 class="wordmark">bakebook</h1>
+      <p class="tagline">a recipe development lab — bake, log, iterate.</p>
+    </header>
+
+    <!-- ============ WORDMARK / LOGO STUDIES ============ -->
+    <section>
+      <p class="label">Wordmark studies — is the name enough of a logo?</p>
+      <div class="wm-grid">
+        <div class="wm-card">
+          <div class="wm" style="font-variation-settings:'opsz' 34;font-family:var(--display);font-weight:500">bakebook</div>
+          <p class="note"><strong>A.</strong> Fraunces, softened — refined vintage cookbook</p>
+        </div>
+        <div class="wm-card">
+          <div class="wm" style="font-family:'Bitter',serif;font-weight:700">bakebook</div>
+          <p class="note"><strong>B.</strong> Bitter — sturdy, grounded slab serif (less fancy)</p>
+        </div>
+        <div class="wm-card">
+          <div class="wm" style="font-family:var(--body);font-weight:800;letter-spacing:-1.5px">bakebook</div>
+          <p class="note"><strong>C.</strong> Nunito heavy — modern &amp; friendly (Kayak / Capital One feel)</p>
+        </div>
+        <div class="wm-card">
+          <div class="wm signature">bakeb<span class="oo"><span class="pat"></span><span class="pat"></span></span>k</div>
+          <p class="note"><strong>D.</strong> C’s rounded type + the “<strong>oo</strong>” as two butter pats — the candidate logo 🧈</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ COLOR ============ -->
+    <section>
+      <p class="label">Color palette</p>
+      <div class="swatches">
+        <div class="sw"><div class="chip" style="background:#EFE4D0"></div><div class="meta"><div class="role">paper</div><div class="hex">#EFE4D0</div></div></div>
+        <div class="sw"><div class="chip" style="background:#FFFCF7;border-bottom:1px solid #EADFC8"></div><div class="meta"><div class="role">card</div><div class="hex">#FFFCF7</div></div></div>
+        <div class="sw"><div class="chip" style="background:#F0E6C8"></div><div class="meta"><div class="role">butter&nbsp;pale</div><div class="hex">#F0E6C8</div></div></div>
+        <div class="sw"><div class="chip" style="background:#DFC7AC"></div><div class="meta"><div class="role">tan</div><div class="hex">#DFC7AC</div></div></div>
+        <div class="sw"><div class="chip" style="background:#CE9585"></div><div class="meta"><div class="role">clay&nbsp;rose</div><div class="hex">#CE9585</div></div></div>
+        <div class="sw"><div class="chip" style="background:#BE6F5D"></div><div class="meta"><div class="role">terracotta ★</div><div class="hex">#BE6F5D</div></div></div>
+        <div class="sw"><div class="chip" style="background:#4A4038"></div><div class="meta"><div class="role">brown</div><div class="hex">#4A4038</div></div></div>
+        <div class="sw"><div class="chip" style="background:#25190F"></div><div class="meta"><div class="role">espresso</div><div class="hex">#25190F</div></div></div>
+        <div class="sw"><div class="chip" style="background:#8FB8DB"></div><div class="meta"><div class="role">butter&nbsp;blue</div><div class="hex">#8FB8DB</div></div></div>
+      </div>
+    </section>
+
+    <!-- ============ TYPE ============ -->
+    <section>
+      <p class="label">Typography</p>
+      <div class="card">
+        <div style="font-family:var(--display);font-variation-settings:'opsz' 34;font-weight:600;font-size:2.2rem;letter-spacing:-.4px;color:var(--heading)">Grandma's Lemon Loaf</div>
+        <p class="note"><strong>Recipe titles &amp; headings</strong> — Fraunces, soft vintage serif. (The <em>logo</em> uses Nunito, above.)</p>
+        <hr style="border:none;border-top:1px solid #EADFC8;margin:1.1rem 0">
+        <h2 class="spec">Grandma's Lemon Loaf</h2>
+        <h3 class="spec">Ingredients &amp; method</h3>
+        <p class="body-spec">This is body text in <strong>Nunito</strong> — a friendly, rounded sans-serif. Notice how it reads warm and approachable, like a handwritten note, while staying easy to read at small sizes.</p>
+        <p class="note">Body &amp; UI — <strong>Nunito</strong> (rounded, friendly)</p>
+      </div>
+    </section>
+
+    <!-- ============ FONT SYSTEM COMPARISON ============ -->
+    <section>
+      <p class="label">Font system — two-font vs. all-Nunito</p>
+      <div class="compare">
+        <div class="card">
+          <div style="font-family:var(--display);font-variation-settings:'opsz' 34;font-weight:600;font-size:1.95rem;color:var(--heading);letter-spacing:-.4px">Grandma's Lemon Loaf</div>
+          <p style="color:var(--muted);margin:.15rem 0 1.1rem">bright, tender, one bowl</p>
+          <div style="font-family:var(--display);font-variation-settings:'opsz' 30;font-weight:600;font-size:1.2rem;color:var(--heading)">Ingredients</div>
+          <p class="body-spec" style="margin:.35rem 0 1.1rem">175 g · ap flour &nbsp;·&nbsp; 200 g · sugar</p>
+          <button class="btn-primary">save recipe</button>
+          <p class="note" style="margin-top:1.1rem"><strong>Two-font</strong> — recipe titles &amp; headings in Fraunces serif, everything else Nunito. Cozy cookbook feel.</p>
+        </div>
+        <div class="card">
+          <div style="font-family:var(--body);font-weight:800;font-size:1.95rem;color:var(--heading);letter-spacing:-.8px">Grandma's Lemon Loaf</div>
+          <p style="color:var(--muted);margin:.15rem 0 1.1rem">bright, tender, one bowl</p>
+          <div style="font-family:var(--body);font-weight:800;font-size:1.2rem;color:var(--heading)">Ingredients</div>
+          <p class="body-spec" style="margin:.35rem 0 1.1rem">175 g · ap flour &nbsp;·&nbsp; 200 g · sugar</p>
+          <button class="btn-primary">save recipe</button>
+          <p class="note" style="margin-top:1.1rem"><strong>All-Nunito</strong> — one font everywhere. Cleaner, more modern app feel.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ BUTTONS + INPUTS ============ -->
+    <section>
+      <p class="label">Buttons &amp; inputs</p>
+      <div class="card">
+        <div class="row">
+          <button class="btn-primary">save recipe</button>
+          <button class="btn-dark">save recipe</button>
+          <button class="btn-ghost">＋ add ingredient</button>
+        </div>
+        <div style="height:1.2rem"></div>
+        <div class="field">
+          <span>✉️</span><input placeholder="search your recipes…">
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ RECIPE CARD ============ -->
+    <section>
+      <p class="label">A recipe card, in context</p>
+      <a class="recipe" href="#">
+        <div class="thumb">🍋</div>
+        <div>
+          <p class="rname">Grandma's Lemon Loaf</p>
+          <p class="rdesc">bright, tender, one bowl · 3 bakes logged</p>
+          <span class="chip-tag">cakes</span>
+        </div>
+      </a>
+    </section>
+
+    <!-- ============ BUTTER ============ -->
+    <section>
+      <p class="label">butter — the AI baking friend</p>
+      <div class="card">
+        <div class="butter-row" style="margin-bottom:1.1rem">
+          <img class="butter-logo" src="butter-logo.svg" alt="butter" width="82">
+          <div class="butter-bubble">Your loaf sank in the middle? Likely underbaked — try 5 more minutes and check the crumb. Want me to compare it to your last bake?</div>
+        </div>
+        <div class="butter-bar">
+          <img class="butter-logo" src="butter-logo.svg" alt="butter" width="58">
+          <span>chat with your ai friend, butter…</span>
+          <div class="butter-send">↑</div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</body>
+</html>

@@ -1,0 +1,370 @@
+<!-- logbook.html — a recipe's log book.
+     Logs live INSIDE the recipe (recipe.logs = a list of bake entries).
+     This one page shows two "views" that we flip between:
+        listView  = the searchable list of past bakes
+        formView  = the form to add or edit one bake
+     We just hide one and show the other — a first taste of how single-page apps work. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>bakebook — log book</title>
+  <link rel="stylesheet" href="styles.css?v=16">
+  <style>
+    body { margin: 0 auto; max-width: 480px;
+      padding: calc(1.5rem + env(safe-area-inset-top, 0px)) 1.5rem calc(1.5rem + env(safe-area-inset-bottom, 0px)); }
+    a.back { color: var(--terracotta-deep); text-decoration: none; font-size: 0.95rem;
+      display: inline-block; padding: 0.45rem 0.6rem 0.45rem 0; }   /* bigger tap target so it's easy to hit near the top */
+    h1 { text-align: center; color: var(--terracotta-deep); font-size: 1.6rem; margin: 0.5rem 0 0.25rem; }
+    .subtitle { text-align: center; color: var(--muted); margin: 0 0 1.25rem; }
+    input, textarea { width: 100%; box-sizing: border-box; padding: 0.6rem 0.75rem;
+      border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; font-family: inherit;
+      background: var(--card); color: var(--ink); }
+    label { display: block; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--muted); margin: 1rem 0 0.35rem; }
+    .form-title { font-size: 1.5rem; margin: 0.2rem 0 1rem; }
+    .search { margin-bottom: 1rem; }
+    .entry { display: flex; gap: 0.8rem; align-items: center; background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; padding: 0.7rem 0.8rem; margin-bottom: 0.6rem; cursor: pointer; }
+    .entry:hover { border-color: var(--terracotta); }
+    .ephoto { width: 52px; height: 52px; border-radius: 6px; flex: 0 0 auto; overflow: hidden;
+      display: flex; align-items: center; justify-content: center; font-size: 1.4rem;
+      background: linear-gradient(135deg, var(--butter-pale), var(--tan)); }
+    .ephoto img { width: 100%; height: 100%; object-fit: cover; }
+    .ebody { flex: 1; min-width: 0; }
+    .edate { font-family: var(--display); font-weight: 600; color: var(--heading); font-size: 1.05rem; }
+    .esnip { color: var(--muted); font-size: 0.88rem; margin-top: 0.1rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .etags { display: flex; gap: 0.35rem; margin-top: 0.35rem; flex-wrap: wrap; }
+    .etag { font-size: 0.68rem; font-weight: 700; color: var(--accent); background: var(--accent-tint);
+      border: 1px solid #E4D08C; border-radius: 999px; padding: 0.1rem 0.5rem; }
+    .empty { text-align: center; color: var(--terracotta-deep); font-style: italic; padding: 1.5rem; }
+    button.primary { display: block; width: 100%; margin-top: 1.25rem; padding: 0.8rem;
+      font-size: 1.05rem; font-weight: 700; color: var(--paper); background: var(--terracotta-deep); border: none;
+      border-radius: 999px; cursor: pointer; }
+    button.primary:hover { background: #8F4634; }
+    button.ghost { display: block; background: none; border: none; color: var(--terracotta-deep);
+      cursor: pointer; font-size: 0.95rem; margin: 1rem auto 0; }
+    button.delete { background: none; border: none; color: var(--danger); cursor: pointer;
+      font-size: 0.9rem; margin-top: 1rem; }
+    .photo-note { color: var(--muted); font-style: italic; font-size: 0.85rem; margin-top: 0.75rem; }
+    .gallery { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+    .thumb { position: relative; width: 80px; height: 80px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in; }
+    .thumb .x { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.55); color: #fff;
+      border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 0.75rem; line-height: 1; }
+    .thumb .mv { position: absolute; bottom: 2px; background: rgba(0,0,0,0.55); color: #fff; border: none; border-radius: 50%;
+      width: 20px; height: 20px; cursor: pointer; font-size: 0.95rem; line-height: 1; padding: 0; display: flex; align-items: center; justify-content: center; }
+    .thumb .mvl { left: 2px; } .thumb .mvr { right: 2px; }
+    .thumb .mv:disabled { opacity: 0.3; cursor: default; }
+    .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none;
+      align-items: center; justify-content: center; z-index: 1000; cursor: zoom-out; }
+    .lightbox.open { display: flex; }
+    .lightbox img { max-width: 92%; max-height: 92%; border-radius: 6px; }
+    .addphoto { display: inline-block; margin-top: 0.5rem; padding: 0.45rem 1rem; font-size: 0.9rem; font-weight: 700;
+      color: var(--paper); background: var(--terracotta-deep); border: none; border-radius: 999px; cursor: pointer; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <a class="back" id="back" href="index.html">← back to recipe</a>
+  <h1>log book</h1>
+  <p class="subtitle" id="subtitle"></p>
+
+  <!-- ===== LIST VIEW ===== -->
+  <div id="listView">
+    <input class="search" id="search" type="text" placeholder="search my logs">
+    <div id="entryList"></div>
+    <button class="primary" id="logBakeBtn">log bake</button>
+  </div>
+
+  <!-- ===== FORM VIEW (hidden until you log/open a bake) ===== -->
+  <div id="formView" class="hidden">
+    <h2 class="form-title" id="formTitle">log a bake</h2>
+    <label for="dateInput">date</label>
+    <input id="dateInput" type="date">
+
+    <label for="ingChanges">ingredient changes</label>
+    <textarea id="ingChanges" rows="2" placeholder=""></textarea>
+
+    <label for="methodChanges">method changes</label>
+    <textarea id="methodChanges" rows="2" placeholder=""></textarea>
+
+    <label for="notes">results / notes</label>
+    <textarea id="notes" rows="4" placeholder="how did it turn out?"></textarea>
+
+    <label>photos</label>
+    <div class="gallery" id="formGallery"></div>
+    <input type="file" id="photoInput" accept="image/*" multiple style="display:none">
+    <button class="addphoto" id="addPhotoBtn" type="button">+ add photo</button>
+
+    <button class="primary" id="saveLogBtn">save log</button>
+    <button class="delete hidden" id="deleteLogBtn">delete this log</button>
+    <button class="ghost" id="cancelBtn">← back to logs</button>
+  </div>
+
+  <!-- full-screen photo viewer (hidden until a photo is clicked) -->
+  <div class="lightbox" id="lightbox"><img id="lightboxImg" src="" alt=""></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+  <script src="firebase-init.js"></script>
+  <script src="bakebook-store.js"></script>
+  <script>
+    // must be signed in — a bake log lives inside your cloud recipe
+    firebase.auth().onAuthStateChanged(function (u) { if (!u) location.replace("index.html"); });
+
+    function loadRecipes() { return JSON.parse(localStorage.getItem("bakebook.recipes")) || []; }
+    function saveRecipes() {
+      try {
+        // re-read the freshest list so a log save updates ONLY this recipe and never clobbers an
+        // edit that synced in from another device.
+        let fresh; try { fresh = JSON.parse(localStorage.getItem("bakebook.recipes")) || []; } catch (e) { fresh = recipes; }
+        if (recipe && recipe.id) {
+          const idx = fresh.findIndex(function (r) { return r && r.id === recipe.id; });
+          if (idx >= 0) fresh[idx] = recipe; else fresh.push(recipe);
+          recipes = fresh;
+        }
+        localStorage.setItem("bakebook.recipes", JSON.stringify(recipes));
+        return true;
+      } catch (err) {
+        bbNotice("couldn't save — storage is full. try removing a photo to free up space.");
+        return false;
+      }
+    }
+
+    // Shrink an image file into a small, storable data URL.
+    function fileToDataURL(file, maxSize, quality, cb) {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const img = new Image();
+        img.onload = function () {
+          let w = img.width, h = img.height;
+          if (w > h && w > maxSize) { h = Math.round(h * maxSize / w); w = maxSize; }
+          else if (h >= w && h > maxSize) { w = Math.round(w * maxSize / h); h = maxSize; }
+          const canvas = document.createElement("canvas");
+          canvas.width = w; canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          cb(canvas.toDataURL("image/jpeg", quality));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // ---- lightbox: click a photo to view it full screen, click again to close ----
+    function openLightbox(url) {
+      document.getElementById("lightboxImg").src = url;
+      document.getElementById("lightbox").classList.add("open");
+    }
+    document.getElementById("lightbox").addEventListener("click", function () {
+      this.classList.remove("open");
+      document.getElementById("lightboxImg").src = "";
+    });
+
+    let formPhotos = [];   // photos for the log entry currently open in the form
+    function renderFormPhotos() {
+      const box = document.getElementById("formGallery");
+      box.innerHTML = "";
+      formPhotos.forEach(function (url, index) {
+        const thumb = document.createElement("div"); thumb.className = "thumb";
+        const img = document.createElement("img"); img.src = url;
+        img.addEventListener("click", function () { openLightbox(url); });
+        thumb.appendChild(img);
+        const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "✕";
+        x.addEventListener("click", function () { const r = formPhotos[index], at = index; formPhotos.splice(index, 1); renderFormPhotos(); showUndo("photo removed", function () { formPhotos.splice(at, 0, r); renderFormPhotos(); }); });
+        thumb.appendChild(x);
+        if (formPhotos.length > 1) {   // ‹ › reorder (saved when the log is saved)
+          const l = document.createElement("button"); l.type = "button"; l.className = "mv mvl"; l.innerHTML = "‹"; l.title = "move left"; l.disabled = index === 0;
+          l.addEventListener("click", function () { if (index === 0) return; const t = formPhotos[index - 1]; formPhotos[index - 1] = formPhotos[index]; formPhotos[index] = t; renderFormPhotos(); });
+          const r = document.createElement("button"); r.type = "button"; r.className = "mv mvr"; r.innerHTML = "›"; r.title = "move right"; r.disabled = index === formPhotos.length - 1;
+          r.addEventListener("click", function () { if (index === formPhotos.length - 1) return; const t = formPhotos[index + 1]; formPhotos[index + 1] = formPhotos[index]; formPhotos[index] = t; renderFormPhotos(); });
+          thumb.appendChild(l); thumb.appendChild(r);
+        }
+        box.appendChild(thumb);
+      });
+    }
+
+    const id = new URLSearchParams(location.search).get("id");
+    document.getElementById("back").href = "recipe.html?id=" + encodeURIComponent(id);
+
+    let recipes = loadRecipes();
+    let recipe = recipes.find(function (r) { return r.id === id; });
+
+    const listView = document.getElementById("listView");
+    const formView = document.getElementById("formView");
+    const entryList = document.getElementById("entryList");
+    const search = document.getElementById("search");
+
+    let editingId = null;   // null = creating a new log; otherwise editing this entry
+    const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    function startLog() {
+      recipes = loadRecipes();
+      recipe = recipes.find(function (r) { return r.id === id; });
+      if (!recipe) {
+        document.body.innerHTML = '<p class="empty">recipe not found. <a href="index.html">go home</a></p>';
+      } else {
+        if (!recipe.logs) recipe.logs = [];   // a recipe's list of bake entries
+        document.getElementById("subtitle").textContent = "for: " + recipe.name;
+        renderList();
+      }
+    }
+    // wait for the cloud copy before drawing
+    if (window.bakebookWhenReady) bakebookWhenReady(startLog); else startLog();
+    // live updates from other devices — but not while a bake is being written in the form
+    if (window.bakebookOnChange) bakebookOnChange(function () { if (formView.classList.contains("hidden")) startLog(); });
+
+    function todayISO() { return new Date().toISOString().slice(0, 10); }   // YYYY-MM-DD
+    function fmtDate(iso) {
+      const p = (iso || "").split("-");
+      if (p.length !== 3) return iso || "(no date)";
+      return (MONTHS[parseInt(p[1], 10) - 1] || "") + " " + parseInt(p[2], 10) + ", " + p[0];
+    }
+    function makeTag(text) { const t = document.createElement("span"); t.className = "etag"; t.textContent = text; return t; }
+
+    // ---- draw the list of past bakes (newest first, filtered by search) ----
+    function renderList() {
+      const term = search.value.trim().toLowerCase();
+      const sorted = recipe.logs.slice().sort(function (a, b) {
+        return (b.date || "").localeCompare(a.date || "");   // dates sort newest-first
+      });
+      const shown = sorted.filter(function (e) {
+        if (term === "") return true;
+        const haystack = ((e.date || "") + " " + (e.ingredientChanges || "") + " " +
+          (e.methodChanges || "") + " " + (e.notes || "")).toLowerCase();
+        return haystack.indexOf(term) !== -1;
+      });
+
+      entryList.innerHTML = "";
+      if (shown.length === 0) {
+        entryList.innerHTML = '<p class="empty">' +
+          (recipe.logs.length === 0
+            ? "no bakes logged yet — tap “log bake” to add your first"
+            : "no logs match your search.") + '</p>';
+        return;
+      }
+      shown.forEach(function (entry) {
+        const card = document.createElement("div"); card.className = "entry";
+
+        const thumb = document.createElement("div"); thumb.className = "ephoto";
+        if (entry.photos && entry.photos.length) {
+          const img = document.createElement("img"); img.src = entry.photos[0]; thumb.appendChild(img);
+        } else { thumb.textContent = ""; }
+
+        const body = document.createElement("div"); body.className = "ebody";
+        const date = document.createElement("div"); date.className = "edate"; date.textContent = fmtDate(entry.date);
+        const snip = document.createElement("div"); snip.className = "esnip";
+        snip.textContent = entry.notes || entry.ingredientChanges || entry.methodChanges || "—";
+        body.appendChild(date); body.appendChild(snip);
+
+        const tags = document.createElement("div"); tags.className = "etags";
+        if (entry.ingredientChanges) tags.appendChild(makeTag("ingredients"));
+        if (entry.methodChanges) tags.appendChild(makeTag("method"));
+        if (entry.photos && entry.photos.length) tags.appendChild(makeTag(entry.photos.length + (entry.photos.length > 1 ? " photos" : " photo")));
+        if (tags.children.length) body.appendChild(tags);
+
+        card.appendChild(thumb); card.appendChild(body);
+        card.addEventListener("click", function () { openForm(entry.id); });
+        entryList.appendChild(card);
+      });
+    }
+    search.addEventListener("input", renderList);
+
+    // ---- flip between the two views ----
+    function showList() { formView.classList.add("hidden"); listView.classList.remove("hidden"); renderList(); }
+    function showForm() { listView.classList.add("hidden"); formView.classList.remove("hidden"); }
+
+    // ---- open the form: blank for a new bake, or filled for an existing one ----
+    function openForm(entryId) {
+      editingId = entryId;
+      const entry = entryId ? recipe.logs.find(function (e) { return e.id === entryId; }) : null;
+      document.getElementById("dateInput").value = entry ? (entry.date || todayISO()) : todayISO();
+      document.getElementById("ingChanges").value = entry ? (entry.ingredientChanges || "") : "";
+      document.getElementById("methodChanges").value = entry ? (entry.methodChanges || "") : "";
+      document.getElementById("notes").value = entry ? (entry.notes || "") : "";
+      formPhotos = entry && entry.photos ? entry.photos.slice() : [];
+      renderFormPhotos();
+      document.getElementById("formTitle").textContent = entry ? "edit bake" : "log a bake";
+      document.getElementById("deleteLogBtn").classList.toggle("hidden", !entry);
+      showForm();
+    }
+
+    document.getElementById("logBakeBtn").addEventListener("click", function () { openForm(null); });
+    document.getElementById("cancelBtn").addEventListener("click", showList);
+
+    document.getElementById("addPhotoBtn").addEventListener("click", function () {
+      document.getElementById("photoInput").click();
+    });
+    document.getElementById("photoInput").addEventListener("change", function () {
+      const input = document.getElementById("photoInput");
+      Array.prototype.forEach.call(input.files, function (f) {
+        fileToDataURL(f, 1000, 0.7, function (url) { formPhotos.push(url); renderFormPhotos(); });
+      });
+      input.value = "";
+    });
+
+    // ---- save the form (new entry or edits to an existing one) ----
+    document.getElementById("saveLogBtn").addEventListener("click", function () {
+      const data = {
+        date: document.getElementById("dateInput").value || todayISO(),
+        ingredientChanges: document.getElementById("ingChanges").value.trim(),
+        methodChanges: document.getElementById("methodChanges").value.trim(),
+        notes: document.getElementById("notes").value.trim(),
+        photos: formPhotos
+      };
+      if (editingId) {
+        const entry = recipe.logs.find(function (e) { return e.id === editingId; });
+        entry.date = data.date; entry.ingredientChanges = data.ingredientChanges;
+        entry.methodChanges = data.methodChanges; entry.notes = data.notes; entry.photos = data.photos;
+      } else {
+        data.id = "l" + Date.now() + Math.random().toString(36).slice(2, 7);
+        recipe.logs.push(data);
+      }
+      if (!saveRecipes()) return;
+      showList();
+    });
+
+    // a small on-brand toast for gentle nudges (replaces the OS alert() box); .bb-notice lives in styles.css
+    function bbNotice(msg) {
+      let el = document.getElementById("bbNotice");
+      if (!el) { el = document.createElement("div"); el.id = "bbNotice"; el.className = "bb-notice"; document.body.appendChild(el); }
+      el.textContent = msg; el.classList.add("show");
+      clearTimeout(el._t); el._t = setTimeout(function () { el.classList.remove("show"); }, 2600);
+    }
+
+    // a quick "undo" toast that pops after a removal and fades away if you don't tap it
+    let undoTimer = null;
+    function showUndo(message, undoFn) {
+      let toast = document.getElementById("undoToast");
+      if (!toast) {
+        toast = document.createElement("div"); toast.id = "undoToast"; toast.className = "undo-toast";
+        const m = document.createElement("span"); m.className = "undo-msg";
+        const b = document.createElement("button"); b.type = "button"; b.textContent = "undo";
+        toast.appendChild(m); toast.appendChild(b); document.body.appendChild(toast);
+      }
+      toast.querySelector(".undo-msg").textContent = message;
+      const oldBtn = toast.querySelector("button");
+      const btn = oldBtn.cloneNode(true); oldBtn.parentNode.replaceChild(btn, oldBtn);
+      btn.addEventListener("click", function () { clearTimeout(undoTimer); toast.classList.remove("show"); undoFn(); });
+      clearTimeout(undoTimer);
+      toast.classList.add("show");
+      undoTimer = setTimeout(function () { toast.classList.remove("show"); }, 5000);
+    }
+
+    document.getElementById("deleteLogBtn").addEventListener("click", function () {
+      if (!editingId) return;
+      const at = recipe.logs.findIndex(function (e) { return e.id === editingId; });
+      if (at === -1) return;
+      const removed = recipe.logs[at];
+      recipe.logs.splice(at, 1);
+      saveRecipes();
+      showList();
+      showUndo("bake log removed", function () { recipe.logs.splice(at, 0, removed); saveRecipes(); showList(); });
+    });
+  </script>
+</body>
+</html>

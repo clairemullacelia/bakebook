@@ -1,0 +1,169 @@
+/* styles.css — bakebook's shared design system.
+   Linked by every page. This one file drives the whole app's look:
+     1) FONTS       — Fraunces (titles) + Nunito (everything else).
+     2) TOKENS      — the palette, type, and shape as CSS variables.
+                      Change a value here → the whole app updates.
+     3) GLOBAL BASE — the default background, text, headings, and polish
+                      every page inherits (shadows, focus rings, smooth motion). */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..900;1,9..144,400..600&family=Nunito:wght@400;600;700;800&display=swap');
+
+:root {
+  /* ---- neutrals (warm creams) ---- */
+  --paper:      #FAF9F6;   /* page background — light, a whisper warm, not stark */
+  --card:       #FDFCFA;   /* cards, inputs, pop-ups — soft off-white (a click or two off pure white) */
+  --cream:      #F1EEE8;   /* subtle surfaces — used sparingly, light & near-neutral */
+  --butter-pale:#F0E6C8;   /* pale butter yellow */
+  --tan:        #DFC7AC;   /* warm tan (decorative placeholders only) */
+  --border:     #EAE5DC;   /* hairline borders — soft, cool */
+  --field-line: #E3DDD3;   /* thin line around white input/pill fields */
+  --grid:       #D5CBB9;   /* darker rule for the ingredient table grid */
+
+  /* ---- accents (terracotta family) — now the hero of the whole app ---- */
+  --clay:          #CE9585; /* dusty rose — secondary */
+  --terracotta:    #BE6F5D; /* accent hue — highlights, active state, borders */
+  --terracotta-deep:#A5533F;/* buttons, links, text on cream (legible) */
+  --focus:         #D4B483; /* honey gold — the border color on any focused text field, app-wide */
+
+  /* ---- small-detail accent — was mustard; now a muted terracotta so it harmonizes ---- */
+  --accent:      #A5533F;   /* counts, chevrons, small meta, tag text, section rules — reads terracotta now */
+  --accent-tint: #F1DED7;   /* pale clay/rose: tag / pill fills */
+
+  /* ---- darks & text ---- */
+  --mauve:    #BEB0AB;
+  --brown:    #4A4038;     /* dark buttons */
+  --espresso: #25190F;     /* deepest brown — sparingly */
+  --ink:      #3A2A20;     /* body text — deep brown */
+  --heading:  #33241A;     /* headings — richer deep brown (never black) */
+  --muted:    #8A6F52;     /* secondary text */
+  --danger:   #C0392B;
+
+  /* ---- butter (the AI) ---- */
+  --butter:         #FDF6D1; /* butter body — from butter's own logo */
+  --butter-deep:    #EFE3A6; /* butter edge/hover */
+  --butter-blue:    #67ACEC; /* butter's blue — accent */
+  --butter-blue-deep:#4E93D8;
+
+  /* ---- shape & type ---- */
+  --radius: 11px;
+  --pill: 999px;
+  --shadow-sm: 0 1px 3px rgba(58,42,32,.09), 0 1px 2px rgba(58,42,32,.05);
+  --shadow:    0 1px 2px rgba(58,42,32,.05), 0 6px 16px rgba(58,42,32,.06);
+  /* two-font system: a cozy cookbook serif for titles & headings, Nunito for body/UI + the wordmark */
+  --display: "Fraunces", Georgia, "Palatino", "Times New Roman", serif;   /* recipe titles, section headers, dialog titles */
+  --body: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* ---- global base ---- */
+body {
+  font-family: var(--body);
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* headings use the warm serif; the wordmark (below) opts back out */
+h1, h2, h3, h4 {
+  font-family: var(--display);
+  color: var(--heading);
+  font-variation-settings: "opsz" 34;   /* calmer optical size */
+  letter-spacing: -0.3px;
+}
+
+/* the bakebook wordmark stays in Nunito (it's the logo, not a heading) */
+.wordmark {
+  font-family: var(--body);
+  font-weight: 800;
+  letter-spacing: -1px;
+  color: var(--heading);
+}
+
+a { color: var(--terracotta-deep); }
+
+/* butter's logo (her Figma SVG), used inline next to text */
+.butter-logo { display: inline-block; vertical-align: middle; }
+
+/* smooth little interactions */
+a.recipe-card, button, input, select, textarea {
+  transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease, transform .05s ease;
+}
+button:active { transform: translateY(1px); }
+
+/* a warm honey-gold focus ring on every field */
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--focus) !important;
+  box-shadow: 0 0 0 3px rgba(212,180,131,.13);
+}
+
+/* gentle depth on the app's cards */
+.card, .recipe-card, .entry, .lib-card, #setup, #settings {
+  box-shadow: var(--shadow-sm);
+}
+
+/* quick "undo" toast — pops after a removal, fades away if not tapped */
+.undo-toast {
+  position: fixed; left: 50%; bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%) translateY(2rem);
+  background: var(--brown); color: var(--paper);
+  padding: 0.55rem 0.6rem 0.55rem 1.1rem; border-radius: 999px;
+  display: flex; align-items: center; gap: 0.9rem; box-shadow: var(--shadow);
+  opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease;
+  z-index: 2000; font-size: 0.9rem; max-width: 90vw;
+}
+.undo-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+.undo-toast button {
+  background: var(--butter); color: var(--espresso); border: none; border-radius: 999px;
+  padding: 0.3rem 0.95rem; font-weight: 800; cursor: pointer; font-family: var(--body); font-size: 0.85rem;
+}
+
+/* native <select>s: drop the OS grey gradient, use a clean card background + our own chevron.
+   (!important because each page also sets an inline background on inputs/selects.) */
+select {
+  -webkit-appearance: none; -moz-appearance: none; appearance: none;
+  background-color: var(--card) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.5 6 6 10.5 1.5' fill='none' stroke='%238A6F52' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 0.7rem center !important;
+  background-size: 0.7rem auto !important;
+  padding-right: 1.9rem !important;
+}
+
+/* ---- branded confirm dialog (replaces the OS's off-brand confirm() box) ---- */
+.bb-modal { position: fixed; inset: 0; z-index: 4000; display: flex; align-items: center; justify-content: center;
+  padding: 1.25rem; background: rgba(40,25,15,.38); opacity: 0; transition: opacity .16s ease; }
+.bb-modal.show { opacity: 1; }
+.bb-modal-card { width: 100%; max-width: 320px; background: var(--card); border-radius: 18px;
+  padding: 1.5rem 1.4rem 1.2rem; box-shadow: 0 18px 50px rgba(40,25,15,.30); text-align: center;
+  transform: translateY(8px) scale(.98); transition: transform .16s ease; }
+.bb-modal.show .bb-modal-card { transform: translateY(0) scale(1); }
+.bb-modal-title { font-family: var(--display); font-weight: 800; font-size: 1.25rem; color: var(--heading);
+  letter-spacing: -0.3px; margin: 0 0 0.5rem; }
+.bb-modal-msg { font-family: var(--body); font-size: 0.92rem; color: var(--muted); line-height: 1.45; margin: 0 0 1.3rem; }
+.bb-modal-actions { display: flex; gap: 0.55rem; justify-content: center; }
+.bb-btn { flex: 1; font-family: var(--body); font-weight: 700; font-size: 0.9rem; letter-spacing: 0.2px;
+  border-radius: 999px; padding: 0.5rem 0.9rem; cursor: pointer; transition: background-color .15s ease, border-color .15s ease; }
+.bb-btn-cancel { background: transparent; color: var(--terracotta-deep); border: 1.5px solid var(--border); }
+.bb-btn-cancel:hover { border-color: var(--terracotta); background: var(--cream); }
+.bb-btn-confirm { background: var(--terracotta-deep); color: var(--paper); border: 1.5px solid var(--terracotta-deep); }
+.bb-btn-confirm:hover { background: #8F4634; border-color: #8F4634; }
+.bb-btn-confirm.danger { background: var(--danger); border-color: var(--danger); }
+.bb-btn-confirm.danger:hover { background: #a5322a; border-color: #a5322a; }
+
+/* ---- branded notice toast (replaces off-brand alert() nudges like "name your recipe first") ---- */
+.bb-notice { position: fixed; left: 50%; bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%) translateY(1.5rem); background: var(--brown); color: #fff;
+  padding: 0.6rem 1.15rem; border-radius: 999px; font-family: var(--body); font-size: 0.9rem; font-weight: 700;
+  box-shadow: var(--shadow); opacity: 0; pointer-events: none; z-index: 5000; max-width: 88vw; text-align: center;
+  transition: opacity .2s ease, transform .2s ease; }
+.bb-notice.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* search fields: a proper magnifier icon instead of the 🔍 emoji */
+.search, #librarySearch {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ccircle cx='7' cy='7' r='4.4' fill='none' stroke='%238A6F52' stroke-width='1.6'/%3E%3Cline x1='10.4' y1='10.4' x2='14' y2='14' stroke='%238A6F52' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: left 0.8rem center !important;
+  background-size: 0.95rem auto !important;
+  padding-left: 2.2rem !important;
+}

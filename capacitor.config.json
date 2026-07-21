@@ -1,0 +1,11 @@
+{
+  "appId": "com.clairemull.bakebook",
+  "appName": "bakebook",
+  "webDir": "bakebook",
+  "plugins": {
+    "FirebaseAuthentication": {
+      "skipNativeAuth": true,
+      "providers": ["apple.com", "google.com"]
+    }
+  }
+}

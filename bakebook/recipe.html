@@ -1,0 +1,2334 @@
+<!-- recipe.html — a single recipe's own page.
+     How it knows WHICH recipe: the web address carries an id, e.g.
+        recipe.html?id=r123abc
+     We read that id, find the matching recipe in the browser's memory, and show it.
+     Everything here is editable and auto-saves as you type. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>bakebook — recipe</title>
+  <link rel="stylesheet" href="styles.css?v=16">
+  <style>
+    body { margin: 0 auto; max-width: 480px;
+      padding: calc(1.5rem + env(safe-area-inset-top, 0px)) 1.5rem calc(1rem + env(safe-area-inset-bottom, 0px)); }
+    /* reserve the extra bottom clearance for the floating butter bubble ONLY while it rests at/near its
+       default bottom spot (body.butter-atbottom, set by the bubble logic). Dragged up or tucked → no dead
+       space. Skipped while editing, which reserves its own room for the floating save pill (body.editing). */
+    body.butter-atbottom:not(.editing) { padding-bottom: calc(3rem + env(safe-area-inset-bottom, 0px)); }
+    /* "saved ✓" flash — fixed near the BOTTOM of the screen, right where the "save recipe" button is,
+       so it lands in front of the baker's eyes the moment they tap save (no scrolling up to find it). */
+    .saved-flash { position: fixed; bottom: calc(1.1rem + env(safe-area-inset-bottom, 0px)); left: 50%; z-index: 500;
+      transform: translateX(-50%) translateY(10px); background: #e9f3da; color: #4f6b32;
+      border: 1px solid #cdd8b0; font-weight: 800; font-size: 1.02rem; padding: 0.6rem 1.4rem;
+      border-radius: 999px; box-shadow: 0 6px 20px rgba(58,42,32,.22); opacity: 0; pointer-events: none;
+      transition: opacity .18s ease, transform .18s ease; }
+    .saved-flash.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    a.back { color: var(--terracotta-deep); text-decoration: none; font-size: 0.95rem;
+      display: inline-block; padding: 0.45rem 0.6rem 0.45rem 0; }   /* bigger tap target so it's easy to hit near the top */
+    .status { float: right; font-size: 0.8rem; color: #7a8a5a; min-height: 1rem; }
+    input, textarea, select { width: 100%; box-sizing: border-box; padding: 0.45rem 0.8rem;
+      border: 1px solid var(--field-line); border-radius: 10px; font-size: 1rem; font-family: inherit;
+      background: var(--card); color: var(--ink); }
+    input.title { font-family: var(--display); font-variation-settings: "opsz" 34; color: var(--heading);
+      font-size: 1.7rem; font-weight: 600; letter-spacing: -0.3px; margin: 0.75rem 0 0.5rem; }
+    textarea.desc { margin-bottom: 0.25rem; }
+    .ing-controls { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 0.75rem; }
+    .seg { display: inline-flex; background: var(--cream); border: 1px solid var(--border); border-radius: 999px; padding: 2px; }
+    .seg button { border: none; background: none; padding: 0.32rem 0.75rem; border-radius: 999px; font-family: inherit;
+      font-size: 0.85rem; font-weight: 700; color: var(--muted); cursor: pointer; }
+    .seg button.on { background: var(--terracotta-deep); color: var(--paper); }
+    .view-banner { font-size: 0.78rem; color: var(--muted); font-style: italic; margin-bottom: 0.6rem; }
+    .viewrow { padding: 0.4rem 0.1rem; border-bottom: 1px solid var(--border); }
+    .viewrow .v-amt { flex: 0 0 7rem; font-weight: 700; color: var(--ink); }
+    .viewrow .v-name { flex: 1; color: var(--ink); }
+    /* ---- read-only VIEW mode ---- */
+    .topactions { display: flex; justify-content: flex-end; margin: 0.25rem 0 0.5rem; }
+    .editbtn { background: none; border: 1.5px solid var(--terracotta); color: var(--terracotta-deep);
+      border-radius: 999px; padding: 0.3rem 0.95rem; font-weight: 700; font-family: inherit; font-size: 0.9rem; cursor: pointer; }
+    .editbtn.done { background: var(--terracotta-deep); color: var(--paper); border-color: var(--terracotta-deep); }
+    .rtitle { font-size: 1.95rem; margin: 0.1rem 0 0.3rem; }
+    .rdesc { padding: 0.2rem 0 0; margin: 0.3rem 0 1rem; color: var(--ink); }
+    .rsection { text-align: center; font-size: 1.35rem; color: var(--accent); margin: 1.4rem 0 0.7rem; }
+    .rmethod { padding-left: 1.4rem; line-height: 1.55; color: var(--ink); }
+    .rmethod li { margin-bottom: 0.55rem; padding-left: 0.2rem; }
+    .ing-table { border: 1px solid var(--grid); border-radius: 10px; overflow: hidden; background: var(--card); }
+    .ing-head { display: flex; border-bottom: 1px solid var(--grid); }
+    .ing-head .hcell { flex: 1; border: none; background: none; padding: 0.45rem; font-family: inherit;
+      font-size: 0.85rem; font-weight: 700; color: var(--muted); cursor: pointer; }
+    .ing-head .hcell.on { color: var(--terracotta-deep); text-decoration: underline; }
+    /* custom-scale slider (replaces the native prompt popup) */
+    .scale-slider { padding: 0.4rem 0.75rem 0.5rem; border-bottom: 1px solid var(--border); background: var(--cream); }
+    .scale-slider .sval { text-align: center; font-family: var(--body); font-weight: 700; font-size: 0.72rem;
+      letter-spacing: 0.03em; color: var(--terracotta-deep); margin-bottom: 0.22rem; }
+    .scale-slider input[type=range] { -webkit-appearance: none; appearance: none; display: block; width: 100%; max-width: 210px;
+      margin: 0 auto; height: 4px; border-radius: 999px; background: var(--tan); outline: none; }
+    .scale-slider input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
+      width: 16px; height: 16px; border-radius: 50%; background: var(--terracotta-deep);
+      cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.28); }
+    .scale-slider input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border: none; border-radius: 50%;
+      background: var(--terracotta-deep); cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.28); }
+    .scale-ticks { display: flex; justify-content: space-between; max-width: 210px; margin: 0.2rem auto 0; font-size: 0.62rem; color: var(--muted); }
+    .ing-line { display: grid; grid-template-columns: 5.5rem 1fr 2.2rem; align-items: stretch; border-bottom: 1px solid var(--grid); }
+    .ing-line:last-child { border-bottom: none; }
+    .il-amt { display: flex; align-items: center; padding: 0.55rem 0.7rem; font-family: var(--body); font-style: italic; color: var(--ink); border-right: 1px solid var(--grid); }
+    .il-name { display: flex; align-items: center; padding: 0.55rem 0.7rem; font-family: var(--body); font-style: italic; color: var(--ink); }
+    .il-note { display: flex; align-items: center; justify-content: center; }
+    .notebtn { background: none; border: none; cursor: pointer; color: var(--muted); padding: 4px; display: flex; }
+    .notebtn.has { color: var(--terracotta-deep); }
+    /* has-a-note state: fill the icon solid so it clearly stands out vs. the empty outline */
+    .notebtn.has svg { fill: var(--terracotta-deep); stroke: var(--terracotta-deep); stroke-width: 1.75; }
+    .il-noterow { padding: 0.35rem 0.75rem 0.5rem 0.75rem; font-size: 0.8rem; font-style: italic; color: var(--muted); background: var(--cream); border-bottom: 1px solid var(--border); }
+    .note-editor { padding: 0.4rem 0.7rem; border-bottom: 1px solid var(--border); background: var(--cream); }
+    .note-editor textarea { width: 100%; box-sizing: border-box; }
+    /* collapsible per-line notes (ingredients + steps) */
+    .note-area { border-bottom: 1px solid var(--border); background: var(--cream); padding: 0.4rem 0.7rem; }
+    .note-input { width: 100%; box-sizing: border-box; font-family: var(--body); font-style: italic; }
+    .note-text { font-size: 0.85rem; font-style: italic; color: var(--ink); cursor: text; white-space: pre-wrap; }
+    /* method as glanceable numbered rows */
+    .method-list { border-top: 1px solid var(--border); }
+    .method-row { display: grid; grid-template-columns: 1.7rem 1fr 2.2rem; gap: 0.3rem; align-items: start;
+      padding: 0.5rem 0.1rem; border-bottom: 1px solid var(--border); }
+    .m-num { font-weight: 700; color: var(--terracotta-deep); }
+    .m-text { line-height: 1.5; color: var(--ink); }
+    .m-note { display: flex; justify-content: center; padding-top: 0.1rem; }
+    .add-photo-tile { width: 80px; height: 80px; border-radius: 10px; border: 1.5px dashed var(--terracotta);
+      background: var(--card); color: var(--terracotta-deep); font-size: 1.6rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; }
+    .add-photo-tile:hover { background: var(--cream); }
+    /* component tabs (cake / frosting …) */
+    .comp-tabs { display: flex; gap: 1.3rem; justify-content: center; flex-wrap: wrap; margin: 0.9rem 0 0.5rem; }
+    .comp-tab { background: none; border: none; font-family: var(--display); font-size: 1.15rem; color: var(--muted); cursor: pointer; padding: 0.15rem 0; }
+    .comp-tab.on { color: var(--terracotta-deep); font-weight: 600; border-bottom: 2px solid var(--terracotta); }
+    .comp-add { background: none; border: none; color: var(--terracotta-deep); cursor: pointer; font-weight: 700; font-size: 0.9rem; }
+    .comp-manage { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
+    .comp-manage input { flex: 1; min-width: 8rem; }
+    .comp-remove { flex: 0 0 auto; background: none; border: 1px solid #E3B3AC; color: var(--danger); border-radius: 999px; padding: 0.35rem 0.8rem; cursor: pointer; font-family: inherit; font-size: 0.85rem; }
+    .comp-move { flex: 0 0 auto; background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 10px;
+      cursor: pointer; font-size: 0.9rem; padding: 0.3rem 0.55rem; line-height: 1; }
+    .comp-move:hover:not(:disabled) { border-color: var(--terracotta); color: var(--terracotta-deep); }
+    .comp-move:disabled { opacity: 0.3; cursor: default; }
+    /* up/down reorder controls on ingredient & step rows */
+    .movecol { display: flex; flex-direction: column; gap: 1px; flex: 0 0 auto; }
+    .movebtn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.7rem; line-height: 1; padding: 1px 4px; }
+    .movebtn:hover:not(:disabled) { color: var(--terracotta-deep); }
+    .movebtn:disabled { opacity: 0.25; cursor: default; }
+    /* variation hierarchy controls */
+    .hier-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.5rem 0 0.25rem; }
+    .hier-btn { background: none; border: 1px solid var(--border); color: var(--terracotta-deep); border-radius: 999px;
+      padding: 0.35rem 0.85rem; cursor: pointer; font-family: inherit; font-size: 0.85rem; }
+    .hier-btn:hover { border-color: var(--terracotta); }
+    label { display: block; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--muted); margin: 1rem 0 0.35rem; }
+    .section-title { font-family: var(--display); font-weight: 800; font-size: 1.15rem; color: var(--accent);
+      letter-spacing: -0.2px; border-top: 1px solid var(--border); padding-top: 1.1rem; margin: 1.6rem 0 0.7rem; }
+    .row { display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.5rem; }
+    .row .amount { flex: 0 0 4rem; }
+    .row .unit { flex: 0 0 5.5rem; }
+    .row .iname { flex: 1; }
+    .row .stepnum { flex: 0 0 1.2rem; font-weight: 700; text-align: center; }
+    .row .steptext { flex: 1; }
+    /* method step editor grows to fit the whole step (no fixed one-line box that hides the end of a long step) */
+    .row textarea.steptext { resize: none; overflow: hidden; line-height: 1.4; min-height: 2.6rem; }
+    .remove { flex: 0 0 auto; background: none; color: var(--danger); border: none;
+      font-size: 1.3rem; cursor: pointer; line-height: 1; padding: 0.3rem 0.2rem 0.3rem 0.5rem; }
+    /* edit rows: drag ⠿ to reorder (replaces the tiny ▲▼), fields shown as protected text you double-tap to edit */
+    .draghandle { flex: 0 0 auto; align-self: stretch; display: flex; align-items: center; justify-content: center;
+      min-width: 2rem; color: var(--muted); cursor: grab; font-size: 1.2rem; line-height: 1; padding: 0 0.4rem;
+      touch-action: none; -webkit-user-select: none; user-select: none; }
+    .draghandle:active { cursor: grabbing; color: var(--terracotta-deep); }
+    .row.dragging { position: relative; z-index: 20; background: var(--card); border-radius: 10px;
+      box-shadow: 0 7px 20px rgba(58,42,32,.20); }
+    .rowdisp { flex: 1; min-width: 0; display: flex; gap: 0.5rem; align-items: baseline;
+      padding: 0.5rem 0.3rem; border-radius: 8px; cursor: default;
+      -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }   /* protected text: press & hold drags the row — it must NOT start an iOS text selection/magnifier */
+    .rowdisp:active { background: var(--cream); }
+    .rowdisp .d-amt { flex: 0 0 auto; font-weight: 700; color: var(--accent); }
+    .rowdisp .d-name { flex: 1; min-width: 0; color: var(--ink); word-break: break-word; }
+    .rowdisp .d-step { flex: 1; min-width: 0; color: var(--ink); line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+    .rowdisp .placeholder { color: var(--muted); font-style: italic; }
+    .rowedit { flex: 1; min-width: 0; display: flex; gap: 0.4rem; align-items: center; }
+    .rowedit.stepedit:not(.hidden) { display: block; }   /* :not(.hidden) so it doesn't out-specify .hidden and show while collapsed */
+    .dhint { font-size: 0.72rem; color: var(--muted); font-style: italic; margin: 0 0 0.55rem 0.1rem; }
+    button.add { margin-top: 0.25rem; padding: 0.36rem 0.95rem; font-size: 0.86rem; font-weight: 700; letter-spacing: 0.2px;
+      color: var(--paper); background: var(--terracotta-deep); border: none; border-radius: 999px; cursor: pointer; }
+    /* the save pill FLOATS at the bottom of the screen while editing, so it's always visible and the
+       user can't scroll past it and forget to save. body.editing adds clearance so nothing hides behind it. */
+    button.saverecipe { position: fixed; left: 50%; transform: translateX(-50%); z-index: 120;
+      bottom: calc(0.9rem + env(safe-area-inset-bottom, 0px)); width: calc(100% - 2.4rem); max-width: 456px;
+      padding: 0.72rem; font-size: 0.98rem; font-weight: 700; letter-spacing: 0.2px;
+      color: var(--paper); background: var(--terracotta-deep); border: none; border-radius: 999px; cursor: pointer;
+      box-shadow: 0 6px 22px rgba(90,50,30,.30); }
+    button.saverecipe:hover { background: #8F4634; }
+    body.editing { padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)); }
+    button.log { display: block; width: 100%; margin-top: 0.6rem; padding: 0.5rem; font-size: 0.92rem; font-weight: 700;
+      color: var(--terracotta-deep); background: var(--card); border: 1.5px solid var(--border); border-radius: 999px; cursor: pointer; }
+    button.log:hover { border-color: var(--terracotta); }
+    button.deleteRecipe { display: block; width: 100%; margin-top: 1rem; padding: 0.55rem; font-size: 0.92rem;
+      color: var(--danger); background: none; border: 1px solid #E3B3AC; border-radius: 999px; cursor: pointer; }
+    button.deleteRecipe:hover { background: #faeceb; }
+    button.butter { display: block; width: 100%; margin-top: 0.6rem; padding: 0.5rem; font-size: 0.92rem; font-weight: 700;
+      color: var(--ink); background: var(--card); border: 1px solid #EFE7CB; border-radius: 999px; cursor: pointer; }
+    button.butter:hover { border-color: var(--terracotta); background: #FFFDF7; }
+    .notfound { text-align: center; color: var(--terracotta-deep); padding: 2rem; }
+    .gallery { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+    .thumb { position: relative; width: 80px; height: 80px; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+    .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in; }
+    .thumb .x { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.55); color: #fff;
+      border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 0.75rem; line-height: 1; }
+    /* reorder arrows on a photo thumb (bottom corners); the ✕ delete sits top-right */
+    .thumb .mv { position: absolute; bottom: 2px; background: rgba(0,0,0,0.55); color: #fff; border: none; border-radius: 50%;
+      width: 20px; height: 20px; cursor: pointer; font-size: 0.95rem; line-height: 1; padding: 0; display: flex; align-items: center; justify-content: center; }
+    .thumb .mvl { left: 2px; } .thumb .mvr { right: 2px; }
+    .thumb .mv:disabled { opacity: 0.3; cursor: default; }
+    .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none;
+      align-items: center; justify-content: center; z-index: 1000; cursor: zoom-out; touch-action: none; }
+    .lightbox.open { display: flex; }
+    .lightbox img { max-width: 92%; max-height: 92%; border-radius: 10px; }
+    /* multi-photo viewer: prev/next arrows + position dots (only when a recipe has >1 photo) — light on the dark backdrop */
+    .lightbox .cook-arrow { color: #fff; opacity: 0.9; z-index: 1002; }
+    .lightbox .cook-arrow:disabled { opacity: 0.28; }
+    .lightbox .lb-dots { position: absolute; left: 0; right: 0; z-index: 1002;
+      bottom: calc(1.1rem + env(safe-area-inset-bottom, 0px)); padding: 0; }
+    .lightbox .lb-dots .cook-dot { background: rgba(255,255,255,0.45); }
+    .lightbox .lb-dots .cook-dot.on { background: #fff; }
+    body.lb-lock { overflow: hidden; }   /* freeze the page behind the open photo viewer */
+    .cat-picker { position: relative; }
+    .cat-dropdown { position: absolute; left: 0; right: 0; top: 100%; z-index: 50; background: var(--card);
+      border: 1px solid var(--border); border-radius: 10px; margin-top: 2px; max-height: 180px; overflow-y: auto;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    .cat-option { padding: 0.5rem 0.75rem; cursor: pointer; }
+    .cat-option:hover { background: var(--cream); }
+    /* custom dropdown — replaces native <select>, which the OS draws dark & oversized */
+    .sel { position: relative; display: inline-block; }
+    .sel-btn { display: flex; align-items: center; gap: 0.4rem; width: 100%; box-sizing: border-box;
+      padding: 0.45rem 0.8rem; border: 1px solid var(--field-line); border-radius: 10px; background: var(--card);
+      color: var(--ink); font-family: inherit; font-size: 1rem; cursor: pointer; }
+    .sel-btn:hover { border-color: var(--terracotta); }
+    .sel-label { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sel-caret { color: var(--terracotta-deep); font-size: 0.75rem; }
+    .sel-list { position: absolute; left: 0; top: 100%; z-index: 60; margin-top: 3px;
+      min-width: 100%; width: max-content; max-width: 16rem;
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      box-shadow: 0 6px 18px rgba(58,42,32,.16); max-height: 240px; overflow-y: auto; }
+    .sel-opt { padding: 0.5rem 0.7rem; cursor: pointer; font-size: 0.95rem; white-space: nowrap; }
+    .sel-opt:hover { background: var(--cream); }
+    .sel-opt.on { color: var(--terracotta-deep); font-weight: 700; }
+    .hidden { display: none; }
+    .lib-card { border: 1px solid var(--border); border-radius: 10px; padding: 0.5rem 0.7rem; margin-bottom: 0.5rem; background: var(--paper); }
+    .lib-name { font-weight: 600; margin-bottom: 0.35rem; }
+    .lib-controls { display: flex; align-items: center; gap: 0.4rem; }
+    /* iOS-style amount wheel: flick up to increase, down to decrease; double-tap to type */
+    .wheel { position: relative; width: 3.4rem; height: 2.9rem; flex: 0 0 auto; overflow: hidden;
+      border: 1px solid var(--border); border-radius: 10px; background: var(--card);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      cursor: ns-resize; touch-action: none; user-select: none; -webkit-user-select: none;
+      transition: transform .12s ease; }
+    /* while scrolling/dragging: enlarge slightly + light up a bar across the current amount */
+    .wheel.grabbing { border-color: var(--terracotta); box-shadow: 0 0 0 3px rgba(190,111,93,.15); transform: scale(1.16); }
+    .wheel .wheel-val { font-weight: 700; font-size: 1rem; color: var(--ink); line-height: 1.05;
+      align-self: stretch; text-align: center; border-radius: 3px; }
+    .wheel.grabbing .wheel-val { background: rgba(190,111,93,.22); }
+    .wheel .wheel-ghost { font-size: 0.7rem; color: var(--muted); opacity: 0.5; line-height: 1.05; }
+    .wheel::before, .wheel::after { content: ""; position: absolute; left: 0; right: 0; height: 0.7rem; pointer-events: none; z-index: 1; }
+    .wheel::before { top: 0; background: linear-gradient(var(--card), rgba(255,252,247,0)); }
+    .wheel::after { bottom: 0; background: linear-gradient(rgba(255,252,247,0), var(--card)); }
+    .wheel.editing { border-color: var(--terracotta); }
+    .wheel.editing .wheel-val, .wheel.editing .wheel-ghost { display: none; }
+    .wheel-edit { width: 2.8rem; text-align: center; border: none; background: transparent; padding: 0;
+      font-weight: 700; font-size: 1rem; color: var(--ink); outline: none; font-family: var(--body); }
+    .wheel-edit:focus { box-shadow: none; }
+    .step { width: 28px; height: 28px; border: 1px solid var(--border); background: var(--card); border-radius: 10px; cursor: pointer; font-size: 1rem; line-height: 1; padding: 0; }
+    .lib-amt { width: 3.2rem; text-align: center; padding: 0.35rem; }
+    .lib-unit { width: auto; padding: 0.35rem; }
+    .lib-add { margin-left: auto; padding: 0.35rem 0.8rem; font-weight: 700; background: var(--terracotta-deep); color: var(--paper); border: none; border-radius: 999px; cursor: pointer; }
+    .lib-grid { max-height: 300px; overflow-y: auto; margin-top: 0.5rem; padding-right: 0.25rem; }
+    .lib-amt { touch-action: none; }
+    .recipe-card { display: block; text-decoration: none; color: inherit; background: var(--card);
+      border-radius: 10px; padding: 0.7rem 1rem; margin-bottom: 0.5rem; }
+    .recipe-card:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+    .recipe-card h3 { margin: 0 0 0.2rem; font-size: 1.05rem; }
+    .meta { color: var(--terracotta-deep); font-size: 0.85rem; margin: 0; }
+    .var-banner { background: var(--cream); border-radius: 10px; padding: 0.6rem 0.9rem; margin: 0.75rem 0;
+      color: var(--ink); cursor: pointer; }
+
+    /* ---- "start cooking" entry button + full-screen cook mode ---- */
+    .cookbtn { display: block; width: 100%; margin: 0.6rem 0 0.2rem; padding: 0.66rem; font-size: 1rem; font-weight: 700; letter-spacing: 0.2px;
+      color: var(--paper); background: var(--terracotta-deep); border: none; border-radius: 999px; cursor: pointer;
+      box-shadow: 0 3px 12px rgba(165,83,63,.32); }
+    .cookbtn:hover { background: #8F4634; }
+    #cookMode { position: fixed; top: 0; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px;
+      z-index: 400; background: var(--paper); display: flex; flex-direction: column; box-sizing: border-box;
+      overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }   /* whole-screen scroll: a step taller than the phone grows the stage and the WHOLE frame scrolls as one page (step first, ingredients below) so no line is ever clipped and the true top is reachable. When everything already fits, the stage flex-grows to fill exactly, so there's nothing to scroll and no bounce. Guards on the iPhone WKWebView traps stay: overflow-x is pinned hidden (overflow-y:auto silently enables overflow-x too → sideways drift), overscroll-behavior:contain kills rubber-band chaining, and we deliberately never set -webkit-overflow-scrolling:touch (it rubber-bands a full-screen element even with nothing to scroll). */
+    .cook-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; padding: calc(0.9rem + env(safe-area-inset-top, 0px)) 1.1rem 0.4rem; flex: none; }
+    .cook-progress { font-family: var(--body); font-weight: 800; font-size: 0.82rem; color: var(--accent); letter-spacing: 0.05em; text-transform: uppercase; }
+    .cook-comp { font-family: var(--display); font-size: 0.95rem; color: var(--muted); flex: 1; text-align: center;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cook-exit { background: none; border: none; color: var(--muted); font-size: 1.5rem; cursor: pointer; line-height: 1; padding: 0.1rem 0.3rem; }
+    /* flex: 1 0 auto (grow:1, shrink:0). A SHORT step lets the stage grow to fill the free space so the step
+       sits centered with no dead space; a LONG step keeps the stage at its full content height (never shrinks,
+       never clips) so the whole #cookMode scrolls to reveal it top-to-bottom. Vertical centering is done with
+       auto margins on .cook-steptext, NOT align-items/justify-content:center — centering an OVERFLOWING flex
+       child clips both ends and makes the top unreachable (the flexbox trap that kept re-clipping long steps).
+       No overflow/scroll on the stage itself: it always fits its own child, and the page scroll lives on
+       #cookMode. flex-direction:column so the step stays full-width (wraps + text-align:center) while the
+       auto margins handle the vertical centering. */
+    .cook-stage { flex: 1 0 auto; position: relative; display: flex; flex-direction: column;
+      padding: 1.3rem 3rem; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+    .cook-steptext { font-family: var(--display); font-size: 1.7rem; line-height: 1.45; color: var(--ink); text-align: center; margin-top: auto; margin-bottom: auto; }
+    /* fixed (not absolute) so the arrows stay reachable at the screen's vertical middle even when the
+       step is long enough to scroll — they're positioned within #cookMode, which is itself fixed. */
+    .cook-arrow { position: fixed; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer;
+      color: var(--terracotta-deep); font-size: 2rem; padding: 0.4rem; line-height: 1; z-index: 2; }
+    .cook-arrow.prev { left: 0.1rem; } .cook-arrow.next { right: 0.1rem; }
+    .cook-arrow:disabled { opacity: 0.18; cursor: default; }
+    .cook-hint { flex: none; text-align: center; font-size: 0.76rem; color: var(--muted); font-style: italic; padding: 0.15rem 0 0.25rem; }
+    .cook-dots { display: flex; justify-content: center; align-items: center; gap: 0.38rem; padding: 0.1rem 0 0.7rem; flex: none; flex-wrap: wrap; }
+    .cook-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--tan); }
+    .cook-dot.on { background: var(--accent); transform: scale(1.25); }
+    /* generous tap target around each small dot so a step is easy to jump to on the make-it screen */
+    .cook-dot-hit { background: none; border: none; margin: 0; padding: 8px 6px; cursor: pointer;
+      display: inline-flex; align-items: center; line-height: 0; -webkit-tap-highlight-color: transparent; }
+    /* the dots double as a scrubber: hold & slide to seek. the dot under the finger pops; a bubble previews the step. */
+    #cookMode .cook-dots { touch-action: none; }
+    #cookMode .cook-dots.scrubbing .cook-dot { transition: transform .08s ease; }
+    #cookMode .cook-dots.scrubbing .cook-dot.on { transform: scale(2.3); }
+    .cook-scrub-preview { position: absolute; z-index: 6; transform: translateX(-50%);
+      background: var(--ink); color: var(--paper); font-family: var(--body); font-weight: 600; font-size: 0.82rem;
+      padding: 0.32rem 0.62rem; border-radius: 9px; max-width: 18rem; white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis; pointer-events: none; box-shadow: 0 5px 16px rgba(40,25,15,.3); }
+    .cook-scrub-preview::after { content: ""; position: absolute; left: 50%; bottom: -5px; transform: translateX(-50%);
+      border: 5px solid transparent; border-top-color: var(--ink); border-bottom: none; }
+    /* ingredients: always shown in full below the step — the whole screen just scrolls (no drawer to
+       open, nothing capped). Simpler than a tap-to-expand box. */
+    .cook-ings { flex: 0 0 auto; min-height: 0; max-height: 42vh; display: flex; flex-direction: column;
+      border-top: 1px solid var(--border); background: var(--card); }
+    .cook-ings-head { flex: none; display: flex; align-items: center; width: 100%; box-sizing: border-box; padding: 0.7rem 1.1rem 0.45rem; }
+    .cook-ings-head .lbl { flex: 1; font-family: var(--display); font-weight: 600; font-size: 1rem; color: var(--heading); }
+    .cook-ings-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
+      -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+      padding: 0 1.1rem calc(1rem + env(safe-area-inset-bottom, 0px)); }
+    .cook-ings.expanded .cook-ings-body { display: block; }
+    .cook-ing { display: flex; gap: 0.7rem; padding: 0.28rem 0; border-bottom: 1px solid var(--border); font-size: 0.95rem; }
+    .cook-ing:last-child { border-bottom: none; }
+    .cook-ing .a { flex: 0 0 5.5rem; font-weight: 700; color: var(--accent); }
+    .cook-ing .n { flex: 1; color: var(--ink); }
+    /* butter — small floating helper button, tucked into the bottom-left, out of the way */
+    .butter-fab { position: fixed; left: 1rem; bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); z-index: 120;
+      width: 3.15rem; height: 3.15rem; border-radius: 50%; padding: 0; background: var(--card);
+      border: 1px solid #EFE7CB; box-shadow: 0 4px 14px rgba(58,42,32,.16); cursor: grab;
+      display: flex; align-items: center; justify-content: center;
+      touch-action: none; -webkit-user-select: none; user-select: none; -webkit-user-drag: none;
+      transition: left .22s cubic-bezier(.22,1,.36,1), top .22s cubic-bezier(.22,1,.36,1), transform .22s cubic-bezier(.22,1,.36,1), opacity .18s ease; }
+    .butter-fab:hover { border-color: var(--terracotta); background: #FFFDF7; }
+    .butter-fab.dragging { transition: none; cursor: grabbing; box-shadow: 0 8px 22px rgba(58,42,32,.26); }
+    .butter-fab.tucked { opacity: .5; }
+    .butter-fab.tucked:hover { opacity: 1; }
+    .butter-fab.tuck-left { transform: translateX(-62%); }
+    .butter-fab.tuck-right { transform: translateX(62%); }
+    .butter-fab img { height: 1.7rem; width: 1.7rem; display: block; pointer-events: none; -webkit-user-drag: none; }
+    /* butter popup — a bottom sheet over the recipe page (same as home) */
+    .butter-sheet { position: fixed; inset: 0; z-index: 300; }
+    .butter-sheet-backdrop { position: absolute; inset: 0; background: rgba(40,25,15,.34); }
+    .butter-sheet-panel { position: absolute; left: 0; right: 0; bottom: 0; height: 90vh; max-width: 480px; margin: 0 auto;
+      background: #FFFDF5; border-radius: 16px 16px 0 0; box-shadow: 0 -8px 30px rgba(40,25,15,.28);
+      display: flex; flex-direction: column; overflow: hidden; }
+    .butter-sheet-head { position: relative; height: 46px; flex: none; touch-action: none; cursor: grab; }
+    .butter-sheet-close { position: absolute; left: 10px; top: 9px; background: none; border: none; cursor: pointer; color: var(--muted); padding: 4px; display: flex; }
+    .butter-sheet-grip { position: absolute; left: 50%; top: 17px; transform: translateX(-50%); width: 46px; height: 5px;
+      border-radius: 2px; background: #E0D3BC; }
+    .butter-sheet-expand { position: absolute; right: 12px; top: 11px; background: none; border: none; cursor: pointer;
+      color: var(--butter-blue); padding: 2px; }
+    .butter-sheet-frame { flex: 1; width: 100%; border: none; }
+    /* first-time coach marks: flash each less-obvious tool; tap one to see a branded explanation */
+    .coach-backdrop { position: fixed; inset: 0; background: rgba(30,18,10,.34); z-index: 400; }
+    .coach-flash { position: relative; z-index: 121; outline: 2.5px solid var(--terracotta); outline-offset: 3px;
+      border-radius: 12px; animation: coachBounce 1.15s ease-in-out infinite; }
+    .butter-fab.coach-flash { position: fixed; border-radius: 50%; }   /* keep the round FAB fixed while it flashes */
+    .coach-pop { z-index: 402; }
+    .butter-fab.coach-pop { position: fixed; }
+    @keyframes coachBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+    /* the explanation bubble — matches the app's branded dialogs (cream card, terracotta button) */
+    .coach-tip { position: fixed; z-index: 403; max-width: 16rem; box-sizing: border-box; background: var(--card); color: var(--ink);
+      border: 1px solid var(--border); padding: 0.85rem 0.95rem 0.8rem; border-radius: 16px; box-shadow: 0 10px 28px rgba(40,25,15,.22); }
+    .coach-tip p { margin: 0 0 0.7rem; font-family: var(--body); font-size: 0.92rem; line-height: 1.45; color: var(--ink); }
+    .coach-tip button { display: block; margin-left: auto; background: var(--terracotta-deep); color: var(--paper); border: none;
+      border-radius: 999px; padding: 0.4rem 1.05rem; font-size: 0.85rem; font-weight: 700; font-family: var(--body); cursor: pointer; }
+    /* cook-mode step note — shown only when the current step has a note */
+    .cook-note { flex: none; text-align: center; padding: 0 1.1rem 0.2rem; }
+    .cook-notebtn { display: inline-flex; align-items: center; gap: 0.32rem; background: none; border: 1px solid var(--border);
+      color: var(--terracotta-deep); border-radius: 999px; padding: 0.2rem 0.72rem; font-size: 0.8rem; font-family: var(--body); cursor: pointer; }
+    .cook-notebody { display: none; max-width: 24rem; margin: 0.45rem auto 0; padding: 0.5rem 0.75rem; text-align: left;
+      background: var(--cream); border: 1px solid var(--border); border-radius: 10px; font-size: 0.9rem; font-style: italic; color: var(--ink); white-space: pre-wrap; }
+    .cook-note.open .cook-notebody { display: block; }
+  </style>
+</head>
+<body>
+  <a class="back" href="index.html">← my recipes</a>
+  <span class="status" id="status"></span>
+  <div id="app"></div>
+
+  <!-- full-screen photo viewer (hidden until a photo is clicked): swipe or use the arrows to move between a recipe's photos -->
+  <div class="lightbox" id="lightbox">
+    <button type="button" class="cook-arrow prev" id="lbPrev" title="previous photo" aria-label="previous photo">&#8249;</button>
+    <img id="lightboxImg" src="" alt="">
+    <button type="button" class="cook-arrow next" id="lbNext" title="next photo" aria-label="next photo">&#8250;</button>
+    <div class="cook-dots lb-dots" id="lbDots"></div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
+  <script src="firebase-init.js"></script>
+  <script src="bakebook-store.js"></script>
+  <script src="bakebook-billing.js"></script>
+  <script>
+    // must be signed in to view a recipe (it lives in your cloud account)
+    firebase.auth().onAuthStateChanged(function (u) { if (!u) location.replace("index.html"); });
+
+    // a small on-brand toast for gentle nudges (replaces the OS alert() box)
+    function bbNotice(msg) {
+      let el = document.getElementById("bbNotice");
+      if (!el) { el = document.createElement("div"); el.id = "bbNotice"; el.className = "bb-notice"; document.body.appendChild(el); }
+      el.textContent = msg; el.classList.add("show");
+      clearTimeout(el._t); el._t = setTimeout(function () { el.classList.remove("show"); }, 2600);
+    }
+
+    // ---- bakebook's own confirm dialog (on-brand; replaces the OS confirm() box) ----
+    // Returns a Promise that resolves true (confirmed) or false (cancelled/backdrop/Esc).
+    function bbConfirm(opts) {
+      opts = opts || {};
+      return new Promise(function (resolve) {
+        const modal = document.createElement("div"); modal.className = "bb-modal";
+        const card = document.createElement("div"); card.className = "bb-modal-card";
+        const h = document.createElement("div"); h.className = "bb-modal-title"; h.textContent = opts.title || "are you sure?";
+        const m = document.createElement("div"); m.className = "bb-modal-msg"; m.textContent = opts.message || "";
+        const actions = document.createElement("div"); actions.className = "bb-modal-actions";
+        const cancel = document.createElement("button"); cancel.type = "button"; cancel.className = "bb-btn bb-btn-cancel";
+        cancel.textContent = opts.cancelLabel || "cancel";
+        const ok = document.createElement("button"); ok.type = "button";
+        ok.className = "bb-btn bb-btn-confirm" + (opts.danger ? " danger" : "");
+        ok.textContent = opts.okLabel || "confirm";
+        actions.appendChild(cancel); actions.appendChild(ok);
+        card.appendChild(h); if (opts.message) card.appendChild(m); card.appendChild(actions);
+        modal.appendChild(card); document.body.appendChild(modal);
+        requestAnimationFrame(function () { modal.classList.add("show"); });
+        let done = false;
+        function close(result) {
+          if (done) return; done = true;
+          modal.classList.remove("show");
+          document.removeEventListener("keydown", onKey);
+          setTimeout(function () { modal.remove(); }, 180);
+          resolve(result);
+        }
+        function onKey(e) { if (e.key === "Escape") close(false); if (e.key === "Enter") close(true); }
+        cancel.addEventListener("click", function () { close(false); });
+        ok.addEventListener("click", function () { close(true); });
+        modal.addEventListener("click", function (e) { if (e.target === modal) close(false); });
+        document.addEventListener("keydown", onKey);
+        ok.focus();
+      });
+    }
+
+    // ---- little helpers to load/save the book ----
+    function loadRecipes() { return JSON.parse(localStorage.getItem("bakebook.recipes")) || []; }
+
+    // We use EXPLICIT save (a Save button) instead of auto-save. Edits update the
+    // recipe in memory and mark it "dirty"; nothing is written to the browser until Save.
+    let dirty = false;
+    function markDirty() {
+      dirty = true;
+      const s = document.getElementById("status");
+      s.textContent = "● unsaved changes"; s.style.color = "var(--danger)";
+    }
+    function saveNow() {
+      recipe.updatedAt = Date.now();   // stamp the edit time (used for "recently edited" sort)
+      // flatten ALL components into the mirror fields so butter / home / search see the whole recipe
+      if (recipe.components) {
+        const fi = [], fs = [], fn = [];
+        recipe.components.forEach(function (c) {
+          (c.ingredients || []).forEach(function (x) { fi.push(x); });
+          (c.steps || []).forEach(function (x) { fs.push(x); });
+          (c.stepNotes || []).forEach(function (x) { fn.push(x); });
+        });
+        recipe.ingredients = fi; recipe.steps = fs; recipe.stepNotes = fn;
+      }
+      try {
+        // re-read the freshest list so a save updates ONLY this recipe and never clobbers an
+        // edit that just synced in from another device.
+        let fresh; try { fresh = JSON.parse(localStorage.getItem("bakebook.recipes")) || []; } catch (e) { fresh = recipes; }
+        const idx = fresh.findIndex(function (r) { return r && r.id === recipe.id; });
+        if (idx >= 0) fresh[idx] = recipe; else fresh.push(recipe);
+        recipes = fresh;
+        localStorage.setItem("bakebook.recipes", JSON.stringify(recipes));
+      } catch (err) {
+        bbNotice("couldn't save — storage is full. try removing a photo to free up space.");
+        if (recipe.components) setComp(compIndex);
+        return;
+      }
+      if (recipe.components) setComp(compIndex);   // restore active-component mirror for continued editing
+      dirty = false;
+      const s = document.getElementById("status");
+      s.textContent = "saved ✓"; s.style.color = "#7a8a5a";
+      flashSaved();
+    }
+    // flash "saved ✓" fixed at the top of the SCREEN (visible even when scrolled down a long recipe)
+    function flashSaved() {
+      let t = document.getElementById("savedFlash");
+      if (!t) { t = document.createElement("div"); t.id = "savedFlash"; t.className = "saved-flash"; document.body.appendChild(t); }
+      t.textContent = "saved ✓";
+      t.classList.add("show");
+      clearTimeout(t._timer);
+      t._timer = setTimeout(function () { t.classList.remove("show"); }, 2000);
+    }
+    // Safety net for the WEB: the browser asks before you leave with unsaved edits.
+    // ⚠️ This does NOTHING inside the native iOS app — WKWebView ignores beforeunload — so we
+    // ALSO explicitly save when the "← my recipes" back link is tapped (below), which is what
+    // actually protects edits on the phone.
+    window.addEventListener("beforeunload", function (e) {
+      if (dirty) { e.preventDefault(); e.returnValue = ""; }
+    });
+    // Leaving a recipe with unsaved edits asks first (the native iOS app has no beforeunload
+    // prompt). Two clear choices — "save & leave" or "leave without saving" — and tapping
+    // outside the dialog keeps you editing, so a stray tap never throws away your work.
+    function confirmLeave(onLeave) {
+      const modal = document.createElement("div"); modal.className = "bb-modal";
+      const card = document.createElement("div"); card.className = "bb-modal-card";
+      const h = document.createElement("div"); h.className = "bb-modal-title"; h.textContent = "unsaved changes";
+      const m = document.createElement("div"); m.className = "bb-modal-msg"; m.textContent = "you’ve made edits that aren’t saved yet.";
+      const actions = document.createElement("div"); actions.className = "bb-modal-actions";
+      const leave = document.createElement("button"); leave.type = "button"; leave.className = "bb-btn bb-btn-cancel"; leave.textContent = "leave without saving";
+      const save = document.createElement("button"); save.type = "button"; save.className = "bb-btn bb-btn-confirm"; save.textContent = "save & leave";
+      actions.appendChild(leave); actions.appendChild(save);
+      card.appendChild(h); card.appendChild(m); card.appendChild(actions);
+      modal.appendChild(card); document.body.appendChild(modal);
+      requestAnimationFrame(function () { modal.classList.add("show"); });
+      let done = false;
+      function close(cb) { if (done) return; done = true; modal.classList.remove("show"); document.removeEventListener("keydown", onKey); setTimeout(function () { modal.remove(); }, 180); if (cb) cb(); }
+      function onKey(e) { if (e.key === "Escape") close(null); }                 // Escape = keep editing
+      leave.addEventListener("click", function () { close(onLeave); });
+      save.addEventListener("click", function () { close(function () { saveNow(); onLeave(); }); });
+      modal.addEventListener("click", function (e) { if (e.target === modal) close(null); });  // tap outside = keep editing
+      document.addEventListener("keydown", onKey);
+      save.focus();
+    }
+    // Tapping "← my recipes" holds navigation only if there are unsaved edits, then asks.
+    document.querySelectorAll("a.back").forEach(function (a) {
+      a.addEventListener("click", function (e) {
+        if (!dirty) return;                                    // nothing unsaved → normal link
+        e.preventDefault();                                    // hold navigation until they choose
+        const href = a.getAttribute("href");
+        confirmLeave(function () { location.href = href; });
+      });
+    });
+
+    // Swipe RIGHT to go back to "my recipes" — mirrors the back link (same unsaved-edits guard).
+    // Guarded so it never hijacks the scale slider, text inputs, buttons/links, the sort menu, or an
+    // open butter sheet; and only fires on a decisive rightward, mostly-horizontal swipe.
+    (function () {
+      let sx = 0, sy = 0, tracking = false;
+      function blocked(t) {
+        return !t || (t.closest && t.closest(
+          'input, textarea, select, button, a, [contenteditable], .sel-list, .scale-slider, #butterSheet'
+        ));
+      }
+      document.addEventListener("touchstart", function (e) {
+        if (e.touches.length !== 1) { tracking = false; return; }
+        if (document.getElementById("cookMode")) { tracking = false; return; }      // cook mode open → its own step-swipe owns the gesture
+        const lb = document.getElementById("lightbox");
+        if (lb && lb.classList.contains("open")) { tracking = false; return; }       // photo viewer open → swipe moves photos, never navigates
+        const bs = document.getElementById("butterSheet");
+        if (bs && !bs.classList.contains("hidden")) { tracking = false; return; }   // sheet open → ignore
+        if (blocked(e.target)) { tracking = false; return; }
+        sx = e.touches[0].clientX; sy = e.touches[0].clientY; tracking = true;
+      }, { passive: true });
+      document.addEventListener("touchend", function (e) {
+        if (!tracking) return; tracking = false;
+        const t = e.changedTouches && e.changedTouches[0]; if (!t) return;
+        const dx = t.clientX - sx, dy = t.clientY - sy;
+        if (dx > 70 && dx > Math.abs(dy) * 1.5) {           // decisive rightward swipe → back to recipes
+          if (dirty) confirmLeave(function () { location.href = "index.html"; });
+          else location.href = "index.html";
+        }
+      }, { passive: true });
+    })();
+
+    // a quick "undo" toast that pops after a removal and fades away if you don't tap it
+    let undoTimer = null;
+    function showUndo(message, undoFn) {
+      let toast = document.getElementById("undoToast");
+      if (!toast) {
+        toast = document.createElement("div"); toast.id = "undoToast"; toast.className = "undo-toast";
+        const m = document.createElement("span"); m.className = "undo-msg";
+        const b = document.createElement("button"); b.type = "button"; b.textContent = "undo";
+        toast.appendChild(m); toast.appendChild(b); document.body.appendChild(toast);
+      }
+      toast.querySelector(".undo-msg").textContent = message;
+      const oldBtn = toast.querySelector("button");
+      const btn = oldBtn.cloneNode(true); oldBtn.parentNode.replaceChild(btn, oldBtn);   // drop any old listener
+      btn.addEventListener("click", function () { clearTimeout(undoTimer); toast.classList.remove("show"); undoFn(); });
+      clearTimeout(undoTimer);
+      toast.classList.add("show");
+      undoTimer = setTimeout(function () { toast.classList.remove("show"); }, 5000);
+    }
+
+    // Shrink an image file and turn it into a small, storable data URL.
+    function fileToDataURL(file, maxSize, quality, cb) {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const img = new Image();
+        img.onload = function () {
+          let w = img.width, h = img.height;
+          if (w > h && w > maxSize) { h = Math.round(h * maxSize / w); w = maxSize; }
+          else if (h >= w && h > maxSize) { w = Math.round(w * maxSize / h); h = maxSize; }
+          const canvas = document.createElement("canvas");
+          canvas.width = w; canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          cb(canvas.toDataURL("image/jpeg", quality));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // ---- lightbox: full-screen photo viewer; swipe (or tap the arrows) to move between a recipe's photos,
+    //      tap the photo/backdrop to close. Opens on the tapped photo, aware of the whole photo set. ----
+    let lbPhotos = [], lbIndex = 0;
+    function lbRender() {
+      const multi = lbPhotos.length > 1;
+      document.getElementById("lightboxImg").src = lbPhotos[lbIndex] || "";
+      const prev = document.getElementById("lbPrev"), next = document.getElementById("lbNext"), dots = document.getElementById("lbDots");
+      prev.style.display = next.style.display = multi ? "" : "none";      // arrows + dots only when there's more than one photo
+      dots.style.display = multi ? "" : "none";
+      prev.disabled = lbIndex <= 0;
+      next.disabled = lbIndex >= lbPhotos.length - 1;
+      dots.innerHTML = "";
+      if (multi) lbPhotos.forEach(function (_, i) {
+        const d = document.createElement("span"); d.className = "cook-dot" + (i === lbIndex ? " on" : ""); dots.appendChild(d);
+      });
+    }
+    function lbGo(delta) { const n = lbIndex + delta; if (n >= 0 && n < lbPhotos.length) { lbIndex = n; lbRender(); } }
+    function openLightbox(index) {
+      lbPhotos = (recipe && recipe.photos) ? recipe.photos.slice() : [];
+      if (!lbPhotos.length) return;
+      lbIndex = (typeof index === "number" && index >= 0 && index < lbPhotos.length) ? index : 0;
+      lbRender();
+      document.getElementById("lightbox").classList.add("open");
+      document.body.classList.add("lb-lock");        // freeze the page behind so it can't scroll
+    }
+    function closeLightbox() {
+      document.getElementById("lightbox").classList.remove("open");
+      document.getElementById("lightboxImg").src = "";
+      document.body.classList.remove("lb-lock");
+    }
+    (function () {
+      const box = document.getElementById("lightbox");
+      document.getElementById("lbPrev").addEventListener("click", function (e) { e.stopPropagation(); lbGo(-1); });
+      document.getElementById("lbNext").addEventListener("click", function (e) { e.stopPropagation(); lbGo(1); });
+      // Distinguish a tap (closes) from a swipe (navigates) by movement distance; an arrow tap does neither of these.
+      let sx = 0, sy = 0, down = false, moved = false, touchActed = false;
+      box.addEventListener("touchstart", function (e) {
+        if (e.touches.length !== 1 || (e.target.closest && e.target.closest(".cook-arrow"))) { down = false; return; }
+        down = true; moved = false; sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+      }, { passive: true });
+      box.addEventListener("touchmove", function (e) {
+        if (!down) return;
+        const t = e.touches[0];
+        if (Math.abs(t.clientX - sx) > 10 || Math.abs(t.clientY - sy) > 10) moved = true;
+      }, { passive: true });
+      box.addEventListener("touchend", function (e) {
+        if (!down) return; down = false; touchActed = true;   // a touch gesture finished → suppress the click it also fires
+        const t = e.changedTouches && e.changedTouches[0]; if (!t) return;
+        const dx = t.clientX - sx, dy = t.clientY - sy;
+        if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) { lbGo(dx < 0 ? 1 : -1); return; }   // decisive swipe → move photo
+        if (!moved) closeLightbox();                                                                // a tap → close
+      }, { passive: true });
+      // Mouse (non-touch) fallback: a plain click on the photo/backdrop closes; arrows are handled above.
+      box.addEventListener("click", function (e) {
+        if (e.target.closest(".cook-arrow")) return;
+        if (touchActed) { touchActed = false; return; }   // this click is the ghost of a touch we already handled
+        closeLightbox();
+      });
+    }());
+
+    // ---- which recipe? read the id from the web address ----
+    const id = new URLSearchParams(location.search).get("id");
+    let recipes = loadRecipes();
+    let recipe = recipes.find(function (r) { return r.id === id; });   // the actual object in the array
+
+    const app = document.getElementById("app");
+    const UNITS = ["g", "kg", "ml", "l", "cups", "tbsp", "tsp", "oz", "pinch", "each"];
+
+    // ---- ingredient library (common ingredients + your most-used, learned live) ----
+    const COMMON_INGREDIENTS = [
+      "all purpose flour", "bread flour", "cake flour", "almond flour", "whole wheat flour",
+      "granulated sugar", "brown sugar", "powdered sugar",
+      "unsalted butter", "salted butter", "eggs", "egg whites", "egg yolks",
+      "whole milk", "buttermilk", "heavy cream", "oat milk", "yogurt", "sour cream", "cream cheese",
+      "baking powder", "baking soda", "yeast", "salt", "vanilla extract", "cocoa powder", "chocolate chips",
+      "honey", "maple syrup", "water", "vegetable oil", "cinnamon", "lemon juice"
+    ];
+    function defaultUnitFor(name) {
+      if (name === "eggs" || name === "egg whites" || name === "egg yolks") return "each";
+      if (name.indexOf("vanilla") !== -1 || name === "cinnamon") return "tsp";
+      const liquids = ["milk", "cream", "water", "oil", "juice", "syrup"];
+      for (let i = 0; i < liquids.length; i++) { if (name.indexOf(liquids[i]) !== -1) return "ml"; }
+      return "g";
+    }
+    // A sensible STARTING amount for the library wheel, based on the unit — so adding vanilla suggests
+    // "1 tsp" and eggs "1 each" instead of a nonsensical "100". The baker still flicks/types the real amount.
+    function defaultAmountFor(unit) {
+      if (unit === "g" || unit === "ml") return 100;   // dry/liquid weigh-or-pour amounts
+      return 1;                                          // each, pinch, tsp, tbsp, cups, kg, l, oz → 1
+    }
+    function getLibrary() {
+      const counts = {};
+      recipes.forEach(function (r) {
+        (r.ingredients || []).forEach(function (ing) {
+          const n = (ing.name || "").trim().toLowerCase();
+          if (n) counts[n] = (counts[n] || 0) + 1;
+        });
+      });
+      // only common whole ingredients; float the ones you use most to the top (imported/custom names stay out)
+      return COMMON_INGREDIENTS.slice().sort(function (a, b) { return (counts[b] || 0) - (counts[a] || 0); });
+    }
+    // Press-and-hold a step button to keep changing fast (accelerates the longer you hold).
+    function attachHold(btn, action) {
+      let timer = null, ticks = 0;
+      function step() { action(); ticks++; const d = ticks > 12 ? 40 : ticks > 5 ? 90 : 200; timer = setTimeout(step, d); }
+      function start(e) { e.preventDefault(); ticks = 0; action(); timer = setTimeout(step, 350); }
+      function stop() { if (timer) { clearTimeout(timer); timer = null; } }
+      btn.addEventListener("mousedown", start);
+      btn.addEventListener("touchstart", start, { passive: false });
+      ["mouseup", "mouseleave", "touchend", "touchcancel"].forEach(function (ev) { btn.addEventListener(ev, stop); });
+    }
+    // A small on-brand dropdown to replace native <select> (the OS draws those dark & oversized).
+    // options: array of "value" strings, or [value, label] pairs. Returns an element with a .value
+    // property (get/set), so existing code that reads/sets el.value keeps working unchanged.
+    function makeSelect(options, value, onChange, opts) {
+      opts = opts || {};
+      const norm = options.map(function (o) { return Array.isArray(o) ? { v: o[0], l: o[1] } : { v: o, l: o }; });
+      const wrap = document.createElement("div"); wrap.className = "sel" + (opts.className ? " " + opts.className : "");
+      const btn = document.createElement("button"); btn.type = "button"; btn.className = "sel-btn";
+      const lbl = document.createElement("span"); lbl.className = "sel-label";
+      const car = document.createElement("span"); car.className = "sel-caret"; car.textContent = "▾";
+      btn.appendChild(lbl); btn.appendChild(car);
+      const list = document.createElement("div"); list.className = "sel-list hidden";
+      let current = value;
+      function labelFor(v) { for (let i = 0; i < norm.length; i++) if (norm[i].v === v) return norm[i].l; return v; }
+      function draw() {
+        lbl.textContent = labelFor(current);
+        Array.prototype.forEach.call(list.children, function (it, i) { it.classList.toggle("on", norm[i].v === current); });
+      }
+      norm.forEach(function (o) {
+        const it = document.createElement("div"); it.className = "sel-opt"; it.textContent = o.l;
+        it.addEventListener("mousedown", function (e) { e.preventDefault(); });   // keep focus put (safe inside inline editors)
+        it.addEventListener("click", function (e) {
+          e.stopPropagation(); current = o.v; draw(); list.classList.add("hidden");
+          if (onChange) onChange(current);
+        });
+        list.appendChild(it);
+      });
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        const willOpen = list.classList.contains("hidden");
+        document.querySelectorAll(".sel-list").forEach(function (el) { el.classList.add("hidden"); });   // one open at a time
+        if (willOpen) list.classList.remove("hidden");
+      });
+      wrap.appendChild(btn); wrap.appendChild(list); draw();
+      Object.defineProperty(wrap, "value", { get: function () { return current; }, set: function (v) { current = v; draw(); } });
+      return wrap;
+    }
+    // a click anywhere else closes any open custom dropdown
+    document.addEventListener("click", function () {
+      document.querySelectorAll(".sel-list").forEach(function (el) { el.classList.add("hidden"); });
+    });
+    // tapping off the custom-scale slider closes it (the chosen scale stays applied)
+    document.addEventListener("click", function () {
+      if (scaleSliderOpen) { scaleSliderOpen = false; buildPage(); }
+    });
+
+    function renderLibrary(gridEl, term, onAdd) {
+      const t = (term || "").trim().toLowerCase();
+      const shown = getLibrary().filter(function (n) { return t === "" || n.indexOf(t) !== -1; });
+      gridEl.innerHTML = "";
+      shown.forEach(function (name) {
+        const card = document.createElement("div"); card.className = "lib-card";
+        const nm = document.createElement("div"); nm.className = "lib-name"; nm.textContent = name;
+        const ctr = document.createElement("div"); ctr.className = "lib-controls";
+        // amount: an iOS-style wheel — flick/drag up to increase, down to decrease; double-tap to type
+        const wheel = document.createElement("div"); wheel.className = "wheel";
+        const gUp = document.createElement("span"); gUp.className = "wheel-ghost";
+        const vEl = document.createElement("span"); vEl.className = "wheel-val";
+        const gDn = document.createElement("span"); gDn.className = "wheel-ghost";
+        wheel.appendChild(gUp); wheel.appendChild(vEl); wheel.appendChild(gDn);
+        let val = defaultAmountFor(defaultUnitFor(name));   // smart starting amount (1 tsp, 1 each, 100 g…)
+        function drawWheel() { vEl.textContent = val; gUp.textContent = val + 1; gDn.textContent = Math.max(0, val - 1); }
+        function setVal(v) { val = Math.max(0, Math.round(v)); drawWheel(); }
+        drawWheel();
+        let startY = 0, startVal = 0, dragging = false, moved = false, lastTap = 0, wheelIdle = null;
+        function beginEdit() {
+          const inp = document.createElement("input");
+          inp.type = "text"; inp.inputMode = "decimal"; inp.className = "wheel-edit"; inp.value = val;
+          wheel.classList.add("editing"); wheel.appendChild(inp);
+          inp.focus(); inp.select();
+          function commit() {
+            const v = parseFloat(inp.value);
+            if (!isNaN(v)) val = Math.max(0, v);
+            inp.remove(); wheel.classList.remove("editing"); drawWheel();
+          }
+          inp.addEventListener("blur", commit);
+          inp.addEventListener("keydown", function (e) {
+            if (e.key === "Enter") { e.preventDefault(); inp.blur(); }
+            else if (e.key === "Escape") { inp.value = val; inp.blur(); }
+          });
+        }
+        wheel.addEventListener("pointerdown", function (e) {
+          if (wheel.classList.contains("editing")) return;
+          dragging = true; moved = false; startY = e.clientY; startVal = val;
+          wheel.setPointerCapture(e.pointerId); wheel.classList.add("grabbing");
+        });
+        wheel.addEventListener("pointermove", function (e) {
+          if (!dragging) return;
+          const dy = startY - e.clientY;
+          if (Math.abs(dy) > 3) moved = true;
+          const mag = Math.pow(Math.abs(dy) / 5, 1.3);
+          setVal(startVal + Math.sign(dy) * mag);
+        });
+        function endDrag() {
+          if (!dragging) return;
+          dragging = false; wheel.classList.remove("grabbing");
+          if (!moved) {
+            const now = Date.now();
+            if (now - lastTap < 320) { lastTap = 0; beginEdit(); }
+            else lastTap = now;
+          }
+        }
+        wheel.addEventListener("pointerup", endDrag);
+        wheel.addEventListener("pointercancel", endDrag);
+        wheel.addEventListener("wheel", function (e) {
+          e.preventDefault(); setVal(val + (e.deltaY < 0 ? 1 : -1));
+          wheel.classList.add("grabbing");                       // flash the enlarge + bar while scrolling
+          clearTimeout(wheelIdle); wheelIdle = setTimeout(function () { wheel.classList.remove("grabbing"); }, 260);
+        }, { passive: false });
+
+        const unit = makeSelect(UNITS, defaultUnitFor(name), null, { className: "lib-unit" });
+        const add = document.createElement("button"); add.className = "lib-add"; add.type = "button"; add.textContent = "+";
+        add.addEventListener("click", function () { onAdd(String(val), unit.value, name); });
+        ctr.appendChild(wheel); ctr.appendChild(unit); ctr.appendChild(add);
+        card.appendChild(nm); card.appendChild(ctr);
+        gridEl.appendChild(card);
+      });
+    }
+
+    // (the page is built at the very end of this script, once all helpers/vars are defined)
+
+    // ---- scaling + unit conversion (display-only; the stored recipe stays as entered) ----
+    let editing = false;       // recipe pages open in read-only VIEW mode; toggle to edit
+    let scale = 1;             // display multiplier
+    let scaleSliderOpen = false; // custom-scale slider shown under the scale header
+    let displayUnit = 'g';     // view table unit: 'g' | 'cups'
+    let compIndex = 0;         // which component (cake / frosting …) is active
+    function comp() { return recipe.components[compIndex]; }
+    function setComp(i) {
+      compIndex = i;
+      const c = recipe.components[i];
+      c.ingredients = c.ingredients || []; c.steps = c.steps || []; c.stepNotes = c.stepNotes || [];
+      // point the mirror fields at the active component so all existing edit/render code "just works"
+      recipe.ingredients = c.ingredients; recipe.steps = c.steps; recipe.stepNotes = c.stepNotes;
+    }
+    const MASS = { g: 1, kg: 1000, oz: 28.3495 };                                  // → grams
+    const VOL_CUPS = { cups: 1, cup: 1, tbsp: 1/16, tsp: 1/48, ml: 1/236.588, l: 1000/236.588 };  // → cups ("cup" and "cups" both, since imports use either)
+    // grams per cup for common ingredients (volume↔weight needs a per-ingredient density)
+    const DENSITY = [
+      ["bread flour",130],["cake flour",114],["almond flour",96],["ap flour",125],["flour",125],
+      ["brown sugar",213],["powdered sugar",120],["icing sugar",120],["caster sugar",200],["granulated sugar",200],["sugar",200],
+      ["cocoa",85],["butter",227],["buttermilk",242],["milk",240],["water",236],["yogurt",245],["sour cream",240],["cream",232],
+      ["honey",340],["maple syrup",322],["oil",218],["cornstarch",128],["cornflour",128],["rolled oats",90],["oats",90],
+      ["baking soda",220],["baking powder",192],["salt",273],["peanut butter",258],["chocolate chips",170]
+    ];
+    function densityFor(name) { const n = (name||"").toLowerCase(); for (let i=0;i<DENSITY.length;i++){ if (n.indexOf(DENSITY[i][0])!==-1) return DENSITY[i][1]; } return null; }
+    function toGrams(a, unit, d) { if (MASS[unit]!=null) return a*MASS[unit]; if (VOL_CUPS[unit]!=null) return d==null?null:a*VOL_CUPS[unit]*d; return null; }
+    // Spoons stay as spoons in "cups" view — converting 1 tsp to cups just rounds to ~0 cups, which
+    // looks like the amount vanished. (grams view still converts them when a density is known.)
+    function toCups(a, unit, d) { if (unit==='tbsp'||unit==='tsp') return null; if (VOL_CUPS[unit]!=null) return a*VOL_CUPS[unit]; if (MASS[unit]!=null) return d==null?null:(a*MASS[unit])/d; return null; }
+    // Parse an amount that may be a decimal ("0.5"), a slash fraction ("1/2", "1 1/2"), or a unicode
+    // fraction ("½", "1½"). parseFloat alone reads "½" as NaN and "1/2" as 1 — both silently became 0/1.
+    const UNI_FRAC = {'½':.5,'⅓':1/3,'⅔':2/3,'¼':.25,'¾':.75,'⅛':.125,'⅜':.375,'⅝':.625,'⅞':.875,'⅕':.2,'⅖':.4,'⅗':.6,'⅘':.8,'⅙':1/6,'⅚':5/6};
+    function parseAmount(s) {
+      if (typeof s === 'number') return s;
+      s = String(s == null ? '' : s).trim();
+      if (!s) return 0;
+      s = s.replace(/[½⅓⅔¼¾⅛⅜⅝⅞⅕⅖⅗⅘⅙⅚]/g, function (m) { return ' ' + UNI_FRAC[m] + ' '; });
+      // A RANGE ("1-2", "1 to 2", "1 or 2") → keep only the lower bound, so scaling doesn't SUM the two
+      // ends into a wrong number. A mixed number ("1 1/2") has no such separator, so it still adds below.
+      s = s.replace(/\s*(?:-|–|—|\bto\b|\bor\b)\s*\d[\d\s./]*$/i, '');
+      let total = 0, matched = false;
+      s.split(/\s+/).forEach(function (tok) {
+        if (!tok) return;
+        if (/^\d+\/\d+$/.test(tok)) { const p = tok.split('/'); if (+p[1]) { total += (+p[0]) / (+p[1]); matched = true; } }
+        else { const n = parseFloat(tok); if (!isNaN(n)) { total += n; matched = true; } }
+      });
+      return matched ? total : 0;
+    }
+    function fmtNum(n) { n = Math.round(n*100)/100; return String(n); }
+    function fmtScale(s) { return s===0.5 ? "½×" : (Math.round(s*100)/100)+"×"; }
+    function fmtGrams(g) { return (g<10 ? Math.round(g*10)/10 : Math.round(g)) + " g"; }
+    function fmtCups(c) {
+      const e8 = Math.max(0, Math.round(c*8)); const w = Math.floor(e8/8), e = e8%8;
+      const m = ["","⅛","¼","⅜","½","⅝","¾","⅞"];
+      let num = (w>0?String(w):"") + (e?(w>0?" ":"")+m[e]:""); if (num==="") num = "0";
+      return num + " cup" + ((w===1 && e===0) ? "" : "s");
+    }
+
+    // dispatcher: recipe pages open in read-only VIEW; edit is an explicit mode
+    function buildPage() {
+      app.innerHTML = "";
+      document.body.classList.toggle("editing", editing);   // floats the save pill + adds bottom clearance
+      if (editing) renderEdit(); else renderView();
+      ensureButterFab();
+      if (!editing) refreshCoach(); else refreshCoach(COACH_EDIT_DEFS);
+    }
+
+    // Make the butter FAB draggable: drag to move, fling past a side edge to tuck it off-screen, tap to
+    // bring it back or open the chat. Same behavior + same saved position key as the home page, so butter
+    // stays wherever the baker parked it across pages. (Mirrors the home page's bubble logic.)
+    function makeButterDraggable(bar, onTap) {
+      const KEY = "bakebook.butter.pos", MARGIN = 12;
+      let pos; try { pos = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (_) { pos = {}; }
+      if (pos.side !== "right" && pos.side !== "left") pos.side = "left";
+      let bsize = 52, bdown = false, bmoved = false, bsx = 0, bsy = 0, bbaseL = 0, bbaseT = 0, bpid = null;
+      const vw = () => window.innerWidth, vh = () => window.innerHeight;
+      const clampTop = (t) => Math.max(64, Math.min(vh() - bsize - 24, t));
+      function savePos() { try { localStorage.setItem(KEY, JSON.stringify(pos)); } catch (_) {} }
+      function applyPos() {
+        bsize = bar.offsetWidth || 52;
+        bar.style.bottom = "auto";
+        if (pos.top == null) pos.top = vh() - bsize - 96;
+        pos.top = clampTop(pos.top);
+        bar.style.left = (pos.side === "right" ? vw() - bsize - MARGIN : MARGIN) + "px";
+        bar.style.top = pos.top + "px";
+        bar.classList.toggle("tuck-right", !!pos.tucked && pos.side === "right");
+        bar.classList.toggle("tuck-left", !!pos.tucked && pos.side !== "right");
+        bar.classList.toggle("tucked", !!pos.tucked);
+        // reserve bottom clearance ONLY while the bubble rests at/near its default bottom spot (not tucked,
+        // and low on the screen). Dragged up or tucked away → drop the class so there's no dead space.
+        var atBottom = !pos.tucked && (pos.top + bsize) >= (vh() - 130);
+        document.body.classList.toggle("butter-atbottom", atBottom);
+      }
+      applyPos();
+      window.addEventListener("resize", applyPos);
+      bar.addEventListener("pointerdown", function (e) {
+        bdown = true; bmoved = false; bsx = e.clientX; bsy = e.clientY;
+        const r = bar.getBoundingClientRect(); bbaseL = r.left; bbaseT = r.top;
+        bpid = e.pointerId; bar.classList.add("dragging");
+        try { bar.setPointerCapture(bpid); } catch (_) {}
+      });
+      bar.addEventListener("pointermove", function (e) {
+        if (!bdown) return;
+        const dx = e.clientX - bsx, dy2 = e.clientY - bsy;
+        if (!bmoved && Math.abs(dx) + Math.abs(dy2) > 6) bmoved = true;
+        if (bmoved) {
+          e.preventDefault();
+          bar.classList.remove("tuck-left", "tuck-right", "tucked");
+          bar.style.left = (bbaseL + dx) + "px";
+          bar.style.top = clampTop(bbaseT + dy2) + "px";
+        }
+      });
+      function endBubble() {
+        if (!bdown) return; bdown = false; bar.classList.remove("dragging");
+        try { bar.releasePointerCapture(bpid); } catch (_) {}
+        if (!bmoved) {                                   // a tap, not a drag
+          if (pos.tucked) { pos.tucked = false; savePos(); applyPos(); }  // peeking sliver → slide back in
+          else onTap();                                                   // normal → open the chat
+          return;
+        }
+        const r = bar.getBoundingClientRect();
+        pos.side = (r.left + bsize / 2) < vw() / 2 ? "left" : "right";
+        pos.top = r.top;
+        pos.tucked = r.left < -bsize * 0.2 || r.right > vw() + bsize * 0.2;  // flung past an edge → tuck away
+        savePos(); applyPos();
+      }
+      bar.addEventListener("pointerup", endBubble);
+      bar.addEventListener("pointercancel", endBubble);
+      bar.addEventListener("dragstart", function (e) { e.preventDefault(); });
+      bar.addEventListener("click", function (e) { e.preventDefault(); if (e.detail === 0) { if (pos.tucked) { pos.tucked = false; savePos(); applyPos(); } else onTap(); } });
+    }
+
+    // butter: one small floating helper button, created once and kept on screen
+    function ensureButterFab() {
+      let fab = document.getElementById("butterFab");
+      if (!fab) {
+        fab = document.createElement("button");
+        fab.id = "butterFab"; fab.type = "button"; fab.className = "butter-fab";
+        fab.title = "ask butter about this recipe";
+        fab.innerHTML = '<img src="butter-logo.svg" alt="ask butter">';
+        document.body.appendChild(fab);
+        makeButterDraggable(fab, openButterSheet);   // measure + position after it's in the DOM
+      }
+      return fab;
+    }
+
+    // butter as a bottom-sheet popup over the recipe (same feel as the home page)
+    function ensureButterSheet() {
+      let sheet = document.getElementById("butterSheet");
+      if (sheet) return sheet;
+      sheet = document.createElement("div"); sheet.id = "butterSheet"; sheet.className = "butter-sheet hidden";
+      sheet.innerHTML =
+        '<div class="butter-sheet-backdrop" id="butterBackdrop"></div>' +
+        '<div class="butter-sheet-panel">' +
+          '<div class="butter-sheet-head">' +
+            '<button class="butter-sheet-close" id="butterClose" title="close" aria-label="close butter"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>' +
+            '<span class="butter-sheet-grip"></span>' +
+            '<a class="butter-sheet-expand" id="butterExpand" title="open full screen" aria-label="open full screen">' +
+              '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>' +
+            '</a>' +
+          '</div>' +
+          '<iframe id="butterFrame" class="butter-sheet-frame" title="butter"></iframe>' +
+        '</div>';
+      document.body.appendChild(sheet);
+      const panel = sheet.querySelector(".butter-sheet-panel");
+      const head = sheet.querySelector(".butter-sheet-head");
+      function closeSheet() { if (window.bbUnlockScroll) window.bbUnlockScroll("butter"); sheet.classList.add("hidden"); panel.style.transition = ""; panel.style.transform = ""; }
+      sheet.querySelector("#butterBackdrop").addEventListener("click", closeSheet);
+      var _bClose = sheet.querySelector("#butterClose"); if (_bClose) _bClose.addEventListener("click", closeSheet);
+      document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !sheet.classList.contains("hidden")) closeSheet(); });
+      // drag the grabber down to dismiss (the chat is an iframe and swallows its own touches, so the header is the handle)
+      let dragging = false, startY = 0, dy = 0;
+      head.addEventListener("pointerdown", function (e) {
+        dragging = true; startY = e.clientY; dy = 0; panel.style.transition = "none";
+        try { head.setPointerCapture(e.pointerId); } catch (e2) {}
+      });
+      head.addEventListener("pointermove", function (e) {
+        if (!dragging) return;
+        dy = Math.max(0, e.clientY - startY);           // downward only
+        panel.style.transform = "translateY(" + dy + "px)";
+      });
+      function endDrag() {
+        if (!dragging) return; dragging = false;
+        panel.style.transition = "transform .25s ease";
+        if (dy > 90) { panel.style.transform = "translateY(100%)"; setTimeout(closeSheet, 220); }  // far enough → close
+        else { panel.style.transform = "translateY(0)"; }                                          // snap back
+      }
+      head.addEventListener("pointerup", endDrag);
+      head.addEventListener("pointercancel", endDrag);
+
+      // pull-to-dismiss forwarded from the chat iframe (butter.html) — same native-sheet feel as index.html.
+      // Tunable: 0.5 = pull resistance (higher = looser); 120 = px pulled before it closes (mitigates accidents).
+      const _frame = sheet.querySelector("#butterFrame");
+      let pullActive = false;
+      window.addEventListener("message", function (e) {
+        const d = e.data;
+        if (!d || d.type !== "butterPull") return;
+        if (_frame && e.source !== _frame.contentWindow) return;
+        if (sheet.classList.contains("hidden")) return;
+        if (d.phase === "move") {
+          pullActive = true;
+          panel.style.transition = "none";
+          panel.style.transform = "translateY(" + (Math.max(0, d.dy) * 0.5) + "px)";
+        } else if (d.phase === "end") {
+          if (!pullActive) return; pullActive = false;
+          panel.style.transition = "transform .25s ease";
+          if (d.dy > 120) { panel.style.transform = "translateY(100%)"; setTimeout(closeSheet, 220); }
+          else { panel.style.transform = "translateY(0)"; }
+        }
+      });
+      return sheet;
+    }
+    function openButterSheet() {
+      if (dirty) saveNow();   // save first so butter reads the latest recipe
+      const sheet = ensureButterSheet();
+      const frame = sheet.querySelector("#butterFrame");
+      // pass the active component so butter edits whatever part the baker is currently on
+      const src = "butter.html?embed=1&id=" + encodeURIComponent(recipe.id) + "&comp=" + (compIndex || 0);
+      if (frame.getAttribute("src") !== src) frame.setAttribute("src", src);
+      sheet.querySelector("#butterExpand").setAttribute("href", "butter.html?id=" + encodeURIComponent(recipe.id));
+      sheet.classList.remove("hidden");
+      if (window.bbLockScroll) window.bbLockScroll("butter");   // freeze the page behind the sheet
+    }
+
+    // butter (inside the popup iframe) can propose edits to this recipe. We apply them HERE — through the
+    // page's own recipe object — so the change saves + syncs like any other edit, and the page re-renders
+    // to show it. The baker has already confirmed in the popup; nothing lands without that tap.
+    window.addEventListener("message", function (e) {
+      const m = e.data;
+      if (!m) return;
+
+      // the butter popup can ask us to open the bakebook+ paywall (it lives on this page, not the iframe)
+      if (m.type === "bakebookOpenPaywall") { if (window.bakebookShowPaywall) bakebookShowPaywall(m.reason || ""); return; }
+
+      // the baker sent their first butter message — stop butter's first-run coach bounce permanently
+      if (m.type === "bakebookButterMessageSent") { markButterCoached(); return; }
+
+      // relay a butter call through this (signed-in) page so the popup doesn't depend on its own iframe auth
+      if (m.type === "bakebookButterCall") {
+        const reply = function (ok, data, error, code) {
+          try { if (e.source) e.source.postMessage({ type: "bakebookButterResult", cid: m.cid, ok: ok, data: data, error: error, code: code }, "*"); } catch (x) {}
+        };
+        try {
+          firebase.functions().httpsCallable("claude")(m.payload)
+            .then(function (res) { reply(true, res.data || {}); })
+            .catch(function (err) { reply(false, null, (err && err.message) || "couldn't reach butter.", err && err.code); });
+        } catch (err) { reply(false, null, (err && err.message) || "couldn't reach butter."); }
+        return;
+      }
+
+      // butter: add a whole new PART (component) to this recipe
+      if (m.type === "bakebookButterAddComponent") {
+        const ackC = function (ok, reason) { try { if (e.source) e.source.postMessage({ type: "bakebookButterComponentAdded", ok: ok, reason: reason }, "*"); } catch (x) {} };
+        try {
+          const c = m.component || {};
+          const newComp = {
+            name: String(c.name || "new part"),
+            ingredients: (Array.isArray(c.ingredients) ? c.ingredients : []).map(function (x) { return { amount: String(x.amount == null ? "" : x.amount), unit: String(x.unit || ""), name: String(x.name || "") }; }),
+            steps: (Array.isArray(c.steps) ? c.steps : []).map(String),
+            stepNotes: []
+          };
+          if (!Array.isArray(recipe.components) || !recipe.components.length) {
+            // migrate a flat recipe into its first component, then append the new part
+            recipe.components = [{ name: "", ingredients: recipe.ingredients || [], steps: recipe.steps || [], stepNotes: recipe.stepNotes || [] }];
+          }
+          recipe.components.push(newComp);
+          setComp(recipe.components.length - 1);   // jump to the newly added part
+          saveNow();
+          buildPage();
+          ackC(true);
+        } catch (err) { ackC(false, "couldn't add the part."); }
+        return;
+      }
+
+      // butter: create a VARIATION of this recipe (a separate new recipe linked via parentId)
+      if (m.type === "bakebookButterCreateVariation") {
+        const ackV = function (ok, reason) { try { if (e.source) e.source.postMessage({ type: "bakebookButterVariationCreated", ok: ok, reason: reason }, "*"); } catch (x) {} };
+        try {
+          const p = m.recipe || {};
+          const now = Date.now();
+          const normIng = function (arr) { return (Array.isArray(arr) ? arr : []).map(function (x) { return { amount: String(x.amount == null ? "" : x.amount), unit: String(x.unit || ""), name: String(x.name || "") }; }); };
+          const normSteps = function (arr) { return (Array.isArray(arr) ? arr : []).map(String); };
+          const variation = {
+            id: "r" + now + Math.random().toString(36).slice(2, 7),
+            parentId: recipe.id,
+            name: String(p.name || (recipe.name + " variation")),
+            description: (typeof p.description === "string" ? p.description : (recipe.description || "")),
+            category: recipe.category || "",
+            components: [], ingredients: [], steps: [], stepNotes: [], photos: [], logs: [],
+            createdAt: now, updatedAt: now
+          };
+          if (Array.isArray(p.components) && p.components.length) {
+            variation.components = p.components.map(function (cc) { return { name: String(cc.name || ""), ingredients: normIng(cc.ingredients), steps: normSteps(cc.steps), stepNotes: [] }; });
+          } else {
+            variation.components = [{ name: "", ingredients: normIng(p.ingredients), steps: normSteps(p.steps), stepNotes: [] }];
+          }
+          variation.components.forEach(function (cc) {   // flatten the mirror fields
+            (cc.ingredients || []).forEach(function (x) { variation.ingredients.push(x); });
+            (cc.steps || []).forEach(function (x) { variation.steps.push(x); });
+            (cc.stepNotes || []).forEach(function (x) { variation.stepNotes.push(x); });
+          });
+          if (dirty) saveNow();   // save any pending edits to the master first
+          let fresh; try { fresh = JSON.parse(localStorage.getItem("bakebook.recipes")) || []; } catch (e2) { fresh = recipes; }
+          fresh.push(variation);
+          recipes = fresh;
+          localStorage.setItem("bakebook.recipes", JSON.stringify(recipes));
+          ackV(true);
+          location.href = "recipe.html?id=" + encodeURIComponent(variation.id);   // open the new variation
+        } catch (err) { ackV(false, "couldn't create the variation."); }
+        return;
+      }
+
+      if (m.type !== "bakebookButterEdit") return;
+      const edit = m.edit || {};
+      const ack = function (ok, reason) {
+        try { if (e.source) e.source.postMessage({ type: "bakebookButterEditApplied", ok: ok, reason: reason }, "*"); } catch (e2) {}
+      };
+      try {
+        const comps = recipe.components;
+        if (Array.isArray(edit.ingredients) || Array.isArray(edit.steps)) {
+          // components are the source of truth — apply to the part butter was editing (the one the baker
+          // had selected when they opened butter), or the flat fields if this recipe has no components.
+          const ti = (comps && comps.length)
+            ? ((typeof m.comp === "number" && m.comp >= 0 && m.comp < comps.length) ? m.comp
+               : ((compIndex >= 0 && compIndex < comps.length) ? compIndex : 0))
+            : -1;
+          const target = (ti >= 0) ? comps[ti] : recipe;
+          if (Array.isArray(edit.ingredients)) target.ingredients = edit.ingredients.map(function (x) {
+            return { amount: String(x.amount == null ? "" : x.amount), unit: String(x.unit || ""), name: String(x.name || "") };
+          });
+          if (Array.isArray(edit.steps)) target.steps = edit.steps.map(String);
+        }
+        if (typeof edit.name === "string" && edit.name.trim()) recipe.name = edit.name.trim();
+        if (typeof edit.description === "string") recipe.description = edit.description;
+        saveNow();     // persists + syncs + flattens components into the mirror fields
+        buildPage();   // re-render so the change is visible immediately
+        ack(true);
+      } catch (err) {
+        ack(false, "couldn't apply the change.");
+      }
+    });
+
+    // ---- first-time coach marks: flash each less-obvious tool; the user taps one to learn it, at their pace ----
+    const COACH_DEFS = [
+      { key: "makeit",  sel: ".cookbtn",   msg: "tap “make it” for a big, full-screen step-by-step view — swipe or tap through each step as you bake." },
+      { key: "note",    sel: ".notebtn",   msg: "see this little page icon? tap it to jot a note on any ingredient or step." },
+      { key: "logbook", sel: ".log",       msg: "log every bake here — what you changed and how it turned out." },
+      { key: "butter",  sel: "#butterFab", msg: "this is butter, your baking helper. tap to ask anything about this recipe." }
+    ];
+    // shown the first time the user opens EDIT mode (once ever, per key) — introduces the two features that
+    // aren't obvious from the buttons alone.
+    const COACH_EDIT_DEFS = [
+      { key: "component", sel: ".comp-add",         msg: "break a recipe into components — like cake + frosting. each part keeps its own ingredients and steps." },
+      { key: "variation", sel: "#addVariationBtn",  msg: "spin off a variation to try a change — a new version that keeps the original recipe untouched." }
+    ];
+    let coachActive = [], coachListenerOn = false, coachBusy = false, coachCurrent = null;
+
+    // (re)flag the still-unseen tools on the current view — safe to call on every rebuild.
+    // Pass a defs array to coach a specific surface (edit mode uses COACH_EDIT_DEFS); defaults to the view tools.
+    function refreshCoach(defs) {
+      requestAnimationFrame(function () {
+        coachActive = [];
+        (defs || COACH_DEFS).forEach(function (d) {
+          if (localStorage.getItem("bakebook.coach2." + d.key)) return;   // already learned — don't flash
+          const el = document.querySelector(d.sel);
+          if (el) { el.classList.add("coach-flash"); coachActive.push({ key: d.key, el: el, msg: d.msg }); }
+        });
+        if (coachActive.length && !coachListenerOn) { document.addEventListener("click", coachIntercept, true); coachListenerOn = true; }
+        else if (!coachActive.length && coachListenerOn) { document.removeEventListener("click", coachIntercept, true); coachListenerOn = false; }
+      });
+    }
+
+    // catch the FIRST tap on a flashing tool (capture phase, so the tool's own action doesn't fire yet)
+    function coachIntercept(e) {
+      if (coachBusy) {   // a tip is open — swallow taps on the item it's explaining
+        if (coachCurrent && (coachCurrent.el === e.target || coachCurrent.el.contains(e.target))) { e.preventDefault(); e.stopPropagation(); }
+        return;
+      }
+      for (let i = 0; i < coachActive.length; i++) {
+        const item = coachActive[i];
+        if (item.el === e.target || item.el.contains(e.target)) {
+          if (item.key === "butter") return;   // butter has NO tip — it's self-explanatory once open; let the tap open the chat. its bounce clears when the baker sends a message (bakebookButterMessageSent).
+          e.preventDefault(); e.stopPropagation();   // explain first; the tool itself waits until the tip is dismissed
+          coachBusy = true; coachCurrent = item;
+          showCoachTip(item, function () {
+            coachBusy = false; coachCurrent = null;
+            item.el.classList.remove("coach-flash");
+            try { localStorage.setItem("bakebook.coach2." + item.key, "1"); } catch (e) {}   // learned — never flash again
+            coachActive = coachActive.filter(function (x) { return x !== item; });
+            if (!coachActive.length && coachListenerOn) { document.removeEventListener("click", coachIntercept, true); coachListenerOn = false; }
+          });
+          return;
+        }
+      }
+    }
+
+    function showCoachTip(item, onClose) {
+      const el = item.el;
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      const backdrop = document.createElement("div"); backdrop.className = "coach-backdrop";
+      const tip = document.createElement("div"); tip.className = "coach-tip";
+      const p = document.createElement("p"); p.textContent = item.msg; tip.appendChild(p);
+      const ok = document.createElement("button"); ok.type = "button"; ok.textContent = "got it"; tip.appendChild(ok);
+      el.classList.add("coach-pop");   // lift the item above the dimming backdrop while it's explained
+      document.body.appendChild(backdrop); document.body.appendChild(tip);
+      function place() {
+        const r = el.getBoundingClientRect(), tr = tip.getBoundingClientRect();
+        let top = r.bottom + 10;
+        if (top + tr.height > window.innerHeight - 10) top = r.top - tr.height - 10;   // flip above if it won't fit below
+        if (top < 10) top = 10;
+        let left = Math.max(10, Math.min(r.left + r.width / 2 - tr.width / 2, window.innerWidth - tr.width - 10));
+        tip.style.top = top + "px"; tip.style.left = left + "px";
+      }
+      setTimeout(place, 320);   // let the smooth-scroll settle first
+      function done() { el.classList.remove("coach-pop"); backdrop.remove(); tip.remove(); if (onClose) onClose(); }
+      ok.addEventListener("click", done);
+      backdrop.addEventListener("click", done);
+    }
+
+    // butter has no "got it" tip; instead its first-run bounce stops for good the first time the baker
+    // sends a message in the chat (signalled from butter.html via postMessage). Persist + stop the flash now.
+    function markButterCoached() {
+      try { localStorage.setItem("bakebook.coach2.butter", "1"); } catch (e) {}   // learned — never flash again
+      const fab = document.getElementById("butterFab");
+      if (fab) fab.classList.remove("coach-flash");
+      coachActive = coachActive.filter(function (x) { return x.key !== "butter"; });
+      if (!coachActive.length && coachListenerOn) { document.removeEventListener("click", coachIntercept, true); coachListenerOn = false; }
+    }
+
+    // pick image files, shrink them, add to the recipe's photos, save, then refresh
+    function addPhotosFlow(onDone) {
+      const input = document.createElement("input");
+      input.type = "file"; input.accept = "image/*"; input.multiple = true; input.style.display = "none";
+      document.body.appendChild(input);
+      input.addEventListener("change", function () {
+        let pending = input.files.length;
+        if (!pending) { input.remove(); return; }
+        Array.prototype.forEach.call(input.files, function (f) {
+          fileToDataURL(f, 1000, 0.7, function (url) {
+            recipe.photos.push(url); pending--;
+            if (pending <= 0) { markDirty(); saveNow(); input.remove(); if (onDone) onDone(); }
+          });
+        });
+      });
+      input.click();
+    }
+
+    // component tabs (cake / frosting …). In edit mode also lets you add/rename/remove.
+    // ---- reorganizing helpers (edit mode): reorder components, merge them, reorder rows ----
+    // move a component left/right in the tab order (and follow the moved one)
+    function moveComponent(i, dir) {
+      const comps = recipe.components; const j = i + dir;
+      if (j < 0 || j >= comps.length) return;
+      const t = comps[i]; comps[i] = comps[j]; comps[j] = t;
+      setComp(j); markDirty(); saveNow(); buildPage();
+    }
+    // merge one component's ingredients + steps into another, then drop the emptied one
+    function mergeComponentInto(src, dst) {
+      const comps = recipe.components;
+      if (src === dst || !comps[src] || !comps[dst]) return;
+      const from = comps[src], to = comps[dst];
+      bbConfirm({
+        title: "merge components?",
+        message: "“" + (from.name || "this component") + "” will fold into “" + (to.name || "the other") + "” — their ingredients and steps combine into one.",
+        okLabel: "merge", cancelLabel: "keep separate"
+      }).then(function (ok) {
+        if (!ok) return;
+        to.ingredients = (to.ingredients || []).concat(from.ingredients || []);
+        const toSteps = to.steps || [], toNotes = to.stepNotes || [];
+        while (toNotes.length < toSteps.length) toNotes.push("");   // keep notes aligned to steps before appending
+        (from.steps || []).forEach(function (s, k) { toSteps.push(s); toNotes.push((from.stepNotes && from.stepNotes[k]) || ""); });
+        to.steps = toSteps; to.stepNotes = toNotes;
+        comps.splice(src, 1);
+        setComp(comps.indexOf(to)); markDirty(); saveNow();
+        if (window.bakebookFlush) bakebookFlush();   // push this structural change to the cloud right away
+        buildPage();
+      });
+    }
+    // swap array item i with its neighbour (dir -1/+1); optionally swap a parallel notes array too
+    function moveItem(arr, notes, i, dir, after) {
+      const j = i + dir;
+      if (j < 0 || j >= arr.length) return;
+      const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+      if (notes) { const tn = notes[i]; notes[i] = notes[j]; notes[j] = tn; }
+      markDirty(); if (after) after();
+    }
+
+    function renderComponentTabs(editable) {
+      const comps = recipe.components;
+      if (!editable && comps.length <= 1) return null;   // single unnamed component → no tabs in view
+      const box = document.createElement("div");
+      const tabs = document.createElement("div"); tabs.className = "comp-tabs";
+      comps.forEach(function (c, i) {
+        const t = document.createElement("button"); t.type = "button"; t.className = "comp-tab" + (i === compIndex ? " on" : "");
+        t.textContent = c.name || ("component " + (i + 1));
+        t.addEventListener("click", function () { if (dirty) saveNow(); setComp(i); buildPage(); });
+        tabs.appendChild(t);
+      });
+      if (editable) {
+        const add = document.createElement("button"); add.type = "button"; add.className = "comp-add"; add.textContent = "+ component";
+        add.addEventListener("click", function () {
+          if (comps.length === 1 && !comps[0].name) comps[0].name = "main";   // name the original when it branches
+          comps.push({ name: "", ingredients: [], steps: [], stepNotes: [] });
+          markDirty(); setComp(comps.length - 1); buildPage();
+        });
+        tabs.appendChild(add);
+      }
+      box.appendChild(tabs);
+      if (editable) {
+        const manage = document.createElement("div"); manage.className = "comp-manage";
+        if (comps.length > 1) {   // reorder the components (◀ ▶)
+          const left = document.createElement("button"); left.type = "button"; left.className = "comp-move"; left.textContent = "◀"; left.title = "move left"; left.disabled = compIndex === 0;
+          left.addEventListener("click", function () { moveComponent(compIndex, -1); });
+          const right = document.createElement("button"); right.type = "button"; right.className = "comp-move"; right.textContent = "▶"; right.title = "move right"; right.disabled = compIndex === comps.length - 1;
+          right.addEventListener("click", function () { moveComponent(compIndex, 1); });
+          manage.appendChild(left); manage.appendChild(right);
+        }
+        const nameInput = document.createElement("input"); nameInput.type = "text"; nameInput.placeholder = "component name (e.g. cake, frosting)";
+        nameInput.value = comp().name || "";
+        nameInput.addEventListener("input", function () { comp().name = nameInput.value; markDirty(); });
+        manage.appendChild(nameInput);
+        if (comps.length > 1) {
+          // merge this component into another one
+          const mergeOpts = [["", "merge into…"]].concat(
+            comps.map(function (c, i) { return [String(i), c.name || ("component " + (i + 1))]; })
+                 .filter(function (o) { return o[0] !== String(compIndex); })
+          );
+          const mergeSel = makeSelect(mergeOpts, "", function (v) { if (v !== "") mergeComponentInto(compIndex, parseInt(v, 10)); }, { className: "comp-mergesel" });
+          manage.appendChild(mergeSel);
+          const rm = document.createElement("button"); rm.type = "button"; rm.className = "comp-remove"; rm.textContent = "remove";
+          rm.addEventListener("click", function () {
+            const removedComp = comp(), at = compIndex;
+            comps.splice(compIndex, 1); setComp(0); saveNow(); buildPage();
+            showUndo("“" + (removedComp.name || "component") + "” removed", function () {
+              comps.splice(at, 0, removedComp); setComp(at); saveNow(); buildPage();
+            });
+          });
+          manage.appendChild(rm);
+        }
+        box.appendChild(manage);
+      }
+      return box;
+    }
+
+    // ---- cook mode: full-screen, big current step, ingredients always visible, swipe to advance ----
+    function ingAmountText(ing) {   // same amount the recipe table shows (respects scale + cups/grams)
+      const a = parseAmount(ing.amount) * scale;
+      const d = densityFor(ing.name);
+      if (displayUnit === 'cups') { const c = toCups(a, ing.unit, d); return (c == null) ? plainAmount(a, ing.unit) : fmtCups(c); }
+      const g = toGrams(a, ing.unit, d); return (g == null) ? plainAmount(a, ing.unit) : fmtGrams(g);
+    }
+    let cookWakeLock = null;
+    async function cookRequestWake() { try { if ("wakeLock" in navigator) cookWakeLock = await navigator.wakeLock.request("screen"); } catch (e) {} }
+    function cookReleaseWake() { try { if (cookWakeLock) { cookWakeLock.release(); cookWakeLock = null; } } catch (e) {} }
+
+    function openCookMode() {
+      // keep each step's note paired with its text (stepNotes is parallel to the UNfiltered steps)
+      const stepData = [];
+      (recipe.steps || []).forEach(function (s, i) {
+        if (s && String(s).trim()) stepData.push({ text: s, note: (recipe.stepNotes && recipe.stepNotes[i]) || "" });
+      });
+      if (!stepData.length) { bbNotice("add a method step first to make this recipe."); return; }
+      const steps = stepData.map(function (d) { return d.text; });
+      let idx = 0;
+
+      const el = document.createElement("div"); el.id = "cookMode";
+
+      // header: exit · component name · step progress
+      const head = document.createElement("div"); head.className = "cook-head";
+      const exit = document.createElement("button"); exit.type = "button"; exit.className = "cook-exit"; exit.innerHTML = "&times;"; exit.title = "exit cook mode";
+      const comp = document.createElement("div"); comp.className = "cook-comp";
+      comp.textContent = (recipe.components && recipe.components.length > 1) ? (recipe.components[compIndex].name || "") : "";
+      const prog = document.createElement("div"); prog.className = "cook-progress";
+      head.appendChild(exit); head.appendChild(comp); head.appendChild(prog);
+
+      // stage: prev arrow · big step · next arrow · swipe hint
+      const stage = document.createElement("div"); stage.className = "cook-stage";
+      const prev = document.createElement("button"); prev.type = "button"; prev.className = "cook-arrow prev"; prev.innerHTML = "&#8249;"; prev.title = "previous step";
+      const txt = document.createElement("div"); txt.className = "cook-steptext";
+      const next = document.createElement("button"); next.type = "button"; next.className = "cook-arrow next"; next.innerHTML = "&#8250;"; next.title = "next step";
+      const hint = document.createElement("div"); hint.className = "cook-hint"; hint.textContent = "swipe or tap the arrows";
+      stage.appendChild(prev); stage.appendChild(txt); stage.appendChild(next);   // hint now lives below the step, not over it
+
+      // progress dots
+      const dots = document.createElement("div"); dots.className = "cook-dots";
+      steps.forEach(function (s, i) {   // each dot is a tap/scrub target — tap to jump, or hold & slide to seek
+        const b = document.createElement("button"); b.type = "button"; b.className = "cook-dot-hit";
+        b.title = "go to step " + (i + 1); b.setAttribute("aria-label", "go to step " + (i + 1));
+        const d = document.createElement("span"); d.className = "cook-dot"; b.appendChild(d);
+        dots.appendChild(b);
+      });
+
+      // step note — a small pill that appears only when the current step has an attached note
+      const noteWrap = document.createElement("div"); noteWrap.className = "cook-note";
+      const noteBtn = document.createElement("button"); noteBtn.type = "button"; noteBtn.className = "cook-notebtn";
+      noteBtn.innerHTML = NOTE_ICON + '<span>note</span>';
+      const noteBody = document.createElement("div"); noteBody.className = "cook-notebody";
+      noteBtn.addEventListener("click", function () { noteWrap.classList.toggle("open"); });
+      noteWrap.appendChild(noteBtn); noteWrap.appendChild(noteBody);
+
+      // ingredients — always shown in full below the step; the whole cook screen just scrolls
+      const ings = document.createElement("div"); ings.className = "cook-ings";
+      const ihead = document.createElement("div"); ihead.className = "cook-ings-head";
+      ihead.innerHTML = '<span class="lbl">ingredients</span>';
+      ings.appendChild(ihead);
+      const ibody = document.createElement("div"); ibody.className = "cook-ings-body";
+      (recipe.ingredients || []).forEach(function (ing) {
+        if (!ing || !(ing.name || "").trim()) return;
+        const row = document.createElement("div"); row.className = "cook-ing";
+        const a = document.createElement("div"); a.className = "a"; a.textContent = ingAmountText(ing);
+        const n = document.createElement("div"); n.className = "n"; n.textContent = ing.name;
+        row.appendChild(a); row.appendChild(n); ibody.appendChild(row);
+      });
+      ings.appendChild(ibody);
+
+      el.appendChild(head); el.appendChild(stage);
+      if (!localStorage.getItem("bakebook.cookHintSeen")) {   // show the swipe hint only the very first time
+        el.appendChild(hint);
+        try { localStorage.setItem("bakebook.cookHintSeen", "1"); } catch (e) {}
+      }
+      el.appendChild(noteWrap); el.appendChild(dots); el.appendChild(ings);
+      document.body.appendChild(el);
+      cookRequestWake();
+
+      function render() {
+        txt.textContent = steps[idx];
+        prog.textContent = "step " + (idx + 1) + " of " + steps.length;
+        prev.disabled = idx === 0; next.disabled = idx === steps.length - 1;
+        hint.style.visibility = (steps.length > 1) ? "visible" : "hidden";
+        const nt = stepData[idx].note;                        // show the note pill only when this step has one
+        noteWrap.style.display = nt ? "block" : "none";
+        noteBody.textContent = nt || "";
+        noteWrap.classList.remove("open");                    // start collapsed each time the step changes
+        Array.prototype.forEach.call(dots.querySelectorAll(".cook-dot"), function (d, i) { d.classList.toggle("on", i === idx); });
+      }
+      function go(delta) { const n = idx + delta; if (n >= 0 && n < steps.length) { idx = n; render(); } }
+      prev.addEventListener("click", function () { go(-1); });
+      next.addEventListener("click", function () { go(1); });
+
+      // ---- scrub the progress dots: tap a dot to jump, or press & hold and SLIDE to seek — the step previews
+      // live (main view + a bubble by your finger) and the dot you're on enlarges, so you can find the step to
+      // go back to without memorising which dot is which. ----
+      const scrubPrev = document.createElement("div"); scrubPrev.className = "cook-scrub-preview hidden"; el.appendChild(scrubPrev);
+      let scrubbing = false, scrubPid = null;
+      function dotIndexAt(x, y) {                                  // nearest dot by 2-D distance (works even if dots wrap)
+        const hits = dots.querySelectorAll(".cook-dot-hit");
+        let best = 0, bestD = Infinity;
+        for (let i = 0; i < hits.length; i++) {
+          const r = hits[i].getBoundingClientRect(), dx = x - (r.left + r.width / 2), dy = y - (r.top + r.height / 2), d = dx * dx + dy * dy;
+          if (d < bestD) { bestD = d; best = i; }
+        }
+        return best;
+      }
+      function showScrubPreview(i) {
+        const s = steps[i] || "";
+        scrubPrev.textContent = (i + 1) + " · " + (s.length > 40 ? s.slice(0, 40).trim() + "…" : s);
+        scrubPrev.classList.remove("hidden");
+        const hit = dots.querySelectorAll(".cook-dot-hit")[i];
+        const cm = el.getBoundingClientRect(), hr = hit.getBoundingClientRect(), dr = dots.getBoundingClientRect();
+        const half = scrubPrev.offsetWidth / 2;
+        let left = hr.left + hr.width / 2 - cm.left;
+        left = Math.max(half + 4, Math.min(left, cm.width - half - 4));         // keep the bubble inside the frame
+        scrubPrev.style.left = left + "px";
+        scrubPrev.style.top = (dr.top - cm.top - scrubPrev.offsetHeight - 8 + el.scrollTop) + "px";   // + scrollTop: the bubble is absolute inside #cookMode, which can now scroll (long steps), so keep it pinned above the dots
+      }
+      function scrubTo(x, y) { const i = dotIndexAt(x, y); if (i !== idx) { idx = i; render(); } showScrubPreview(i); }
+      dots.addEventListener("pointerdown", function (e) {
+        scrubbing = true; scrubPid = e.pointerId; dots.classList.add("scrubbing");
+        try { dots.setPointerCapture(e.pointerId); } catch (_) {}
+        scrubTo(e.clientX, e.clientY);
+      });
+      dots.addEventListener("pointermove", function (e) { if (scrubbing && e.pointerId === scrubPid) { e.preventDefault(); scrubTo(e.clientX, e.clientY); } });
+      function endScrub(e) {
+        if (!scrubbing || (e && e.pointerId !== scrubPid)) return;
+        scrubbing = false; scrubPid = null; dots.classList.remove("scrubbing"); scrubPrev.classList.add("hidden");
+      }
+      dots.addEventListener("pointerup", endScrub);
+      dots.addEventListener("pointercancel", endScrub);
+
+      // swipe anywhere in the cook overlay: left = next step, right = previous. Bound to the whole
+      // overlay (not just the step box) so a swipe over the ingredients works too, and it never bubbles
+      // out to the page's back-swipe (which is also guarded off while cook mode is open).
+      //
+      // Uses TOUCH events, not pointer events: the overlay is a vertical scroll container, so on a real
+      // finger the browser starts a vertical pan and fires `pointercancel` mid-gesture — the old pointerup
+      // handler saw down=false and dropped every swipe. touchend always fires with the final coords even
+      // after a scroll, so the net horizontal distance is still measurable. A mouse fallback (pointer
+      // events, mouse-only) keeps it working on desktop without double-firing off touch-synthesised events.
+      let sx = 0, sy = 0, down = false;
+      function startSwipe(x, y) { down = true; sx = x; sy = y; }
+      function endSwipe(x, y) {
+        if (!down) return; down = false;
+        const dx = x - sx, dy = y - sy;
+        if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) go(dx < 0 ? 1 : -1);   // decisive, mostly-horizontal
+      }
+      el.addEventListener("touchstart", function (e) {
+        if (e.touches.length !== 1) { down = false; return; }
+        if (e.target.closest && e.target.closest(".cook-dots")) { down = false; return; }   // dots are a scrubber — don't also step-swipe
+        startSwipe(e.touches[0].clientX, e.touches[0].clientY);
+      }, { passive: true });
+      el.addEventListener("touchend", function (e) {
+        const t = e.changedTouches && e.changedTouches[0]; if (!t) { down = false; return; }
+        endSwipe(t.clientX, t.clientY);
+      }, { passive: true });
+      el.addEventListener("touchcancel", function () { down = false; });
+      el.addEventListener("pointerdown", function (e) { if (e.pointerType && e.pointerType !== "mouse") return; if (e.target.closest && e.target.closest(".cook-dots")) return; startSwipe(e.clientX, e.clientY); });
+      el.addEventListener("pointerup", function (e) { if (e.pointerType && e.pointerType !== "mouse") return; endSwipe(e.clientX, e.clientY); });
+
+      function onKey(e) {
+        if (e.key === "Escape") close();
+        else if (e.key === "ArrowRight") go(1);
+        else if (e.key === "ArrowLeft") go(-1);
+      }
+      function onVis() { if (document.visibilityState === "visible") cookRequestWake(); }   // re-arm wake lock after a tab switch
+      function close() {
+        document.removeEventListener("keydown", onKey);
+        document.removeEventListener("visibilitychange", onVis);
+        cookReleaseWake(); el.remove();
+      }
+      exit.addEventListener("click", close);
+      document.addEventListener("keydown", onKey);
+      document.addEventListener("visibilitychange", onVis);
+
+      render();
+    }
+
+    function renderView() {
+      // edit action
+      const topbar = document.createElement("div"); topbar.className = "topactions";
+      const editBtn = document.createElement("button"); editBtn.className = "editbtn"; editBtn.type = "button"; editBtn.textContent = "edit";
+      editBtn.addEventListener("click", function () { editing = true; buildPage(); });
+      topbar.appendChild(editBtn); app.appendChild(topbar);
+
+      // title
+      const h = document.createElement("h1"); h.className = "rtitle"; h.textContent = recipe.name || "untitled recipe"; app.appendChild(h);
+
+      // variation banner (if this is a variation of another recipe)
+      if (recipe.parentId) {
+        const master = recipes.find(function (r) { return r.id === recipe.parentId; });
+        const banner = document.createElement("div"); banner.className = "var-banner";
+        banner.textContent = "variation of " + (master ? master.name : "a recipe");
+        if (master) banner.addEventListener("click", function () { location.href = "recipe.html?id=" + encodeURIComponent(master.id); });
+        app.appendChild(banner);
+      }
+
+      // description, framed by rules (like the mockup)
+      if (recipe.description) {
+        const d = document.createElement("p"); d.className = "rdesc"; d.textContent = recipe.description; app.appendChild(d);
+      }
+
+      // component tabs (if this recipe has more than one)
+      const vtabs = renderComponentTabs(false); if (vtabs) app.appendChild(vtabs);
+
+      // start-cooking entry (only when there are method steps)
+      if (recipe.steps && recipe.steps.some(function (s) { return s && s.trim(); })) {
+        const cookBtn = document.createElement("button"); cookBtn.type = "button"; cookBtn.className = "cookbtn";
+        cookBtn.textContent = "▶ make it";
+        cookBtn.addEventListener("click", openCookMode);
+        app.appendChild(cookBtn);
+      }
+
+      // ingredients (glanceable table)
+      const ih = document.createElement("h2"); ih.className = "rsection"; ih.textContent = "ingredients"; app.appendChild(ih);
+      app.appendChild(buildIngredientTable());
+
+      // method (numbered rows, each with its own optional note)
+      if (recipe.steps && recipe.steps.some(function (s) { return s && s.trim(); })) {
+        const mh = document.createElement("h2"); mh.className = "rsection"; mh.textContent = "method"; app.appendChild(mh);
+        const mwrap = document.createElement("div"); mwrap.className = "method-list";
+        let n = 0;
+        recipe.steps.forEach(function (s, index) {
+          if (!s || !s.trim()) return;
+          n++;
+          const row = document.createElement("div"); row.className = "method-row";
+          const num = document.createElement("div"); num.className = "m-num"; num.textContent = n + ".";
+          const tx = document.createElement("div"); tx.className = "m-text"; tx.textContent = s;
+          const nc = document.createElement("div"); nc.className = "m-note";
+          const nb = document.createElement("button"); nb.type = "button"; nb.className = "notebtn" + (stepNote(index) ? " has" : ""); nb.innerHTML = NOTE_ICON;
+          const note = makeNote(
+            function () { return stepNote(index); },
+            function (v) { setStepNote(index, v); markDirty(); saveNow(); },
+            function () { nb.classList.toggle("has", !!stepNote(index)); }
+          );
+          nb.addEventListener("click", function () { note.toggle(); });
+          nc.appendChild(nb);
+          row.appendChild(num); row.appendChild(tx); row.appendChild(nc);
+          mwrap.appendChild(row); mwrap.appendChild(note.el);
+        });
+        app.appendChild(mwrap);
+      }
+
+      // photos (kept at the bottom; always shown so you can add straight from the view)
+      const pt = document.createElement("h2"); pt.className = "rsection"; pt.textContent = "photos"; app.appendChild(pt);
+      const g = document.createElement("div"); g.className = "gallery";
+      recipe.photos.forEach(function (url, index) {
+        g.appendChild(photoThumbEl(url, index, recipe.photos.length, {
+          remove: function (i) {
+            const y = window.scrollY, removed = recipe.photos[i];
+            recipe.photos.splice(i, 1); markDirty(); saveNow(); buildPage(); window.scrollTo(0, y);
+            showUndo("photo removed", function () { recipe.photos.splice(i, 0, removed); markDirty(); saveNow(); buildPage(); window.scrollTo(0, y); });
+          },
+          move: function (i, dir) { const y = window.scrollY; moveItem(recipe.photos, null, i, dir, function () { saveNow(); buildPage(); window.scrollTo(0, y); }); }
+        }));
+      });
+      const addTile = document.createElement("button"); addTile.type = "button"; addTile.className = "add-photo-tile"; addTile.textContent = "＋"; addTile.title = "add photo";
+      addTile.addEventListener("click", function () { addPhotosFlow(function () { buildPage(); }); });
+      g.appendChild(addTile);
+      app.appendChild(g);
+
+      // variations (if this master has any)
+      if (!recipe.parentId) {
+        const vars = recipes.filter(function (r) { return r.parentId === recipe.id; });
+        if (vars.length) {
+          const vt = document.createElement("h2"); vt.className = "rsection"; vt.textContent = "variations"; app.appendChild(vt);
+          vars.forEach(function (v) {
+            const a = document.createElement("a"); a.className = "recipe-card"; a.href = "recipe.html?id=" + encodeURIComponent(v.id);
+            const h3 = document.createElement("h3"); h3.textContent = v.name; a.appendChild(h3); app.appendChild(a);
+          });
+        }
+      }
+
+      // actions
+      const logBtn = document.createElement("button"); logBtn.className = "log"; logBtn.type = "button";
+      logBtn.innerHTML = '<img src="logbook-icon.svg" alt="" style="height:1.15em;margin-right:.45em;vertical-align:-0.18em"> view log book';
+      logBtn.addEventListener("click", function () { location.href = "logbook.html?id=" + encodeURIComponent(recipe.id); });
+      app.appendChild(logBtn);
+      // butter now lives in the floating helper button (ensureButterFab), not inline here
+    }
+
+    function plainAmount(a, unit) { return fmtNum(a) + (unit && unit !== 'each' ? " " + unit : ""); }
+
+    // an on-brand 1×–5× slider for custom scaling (replaces the native prompt popup)
+    function buildScaleSlider(onChange) {
+      const panel = document.createElement("div"); panel.className = "scale-slider";
+      panel.addEventListener("click", function (e) { e.stopPropagation(); });   // clicks inside shouldn't close it
+      const val = document.createElement("div"); val.className = "sval"; val.textContent = fmtScale(scale);
+      const range = document.createElement("input"); range.type = "range";
+      range.min = "0.5"; range.max = "5"; range.step = "0.25";   // min 0.5 so bakers can HALVE a batch, not just scale up
+      range.value = String(Math.min(5, Math.max(0.5, scale)));
+      range.addEventListener("input", function () {
+        scale = parseFloat(range.value); val.textContent = fmtScale(scale); onChange();   // rescale amounts live, no rebuild
+      });
+      const ticks = document.createElement("div"); ticks.className = "scale-ticks";
+      ["½", "1", "2", "3", "4", "5"].forEach(function (n) { const s = document.createElement("span"); s.textContent = n + "×"; ticks.appendChild(s); });
+      panel.appendChild(val); panel.appendChild(range); panel.appendChild(ticks);
+      return panel;
+    }
+
+    // the glanceable ingredients table: cups/grams + 1x/2x/custom headers, subtle per-line notes
+    function buildIngredientTable() {
+      const wrap = document.createElement("div"); wrap.className = "ing-table";
+
+      // header row: unit (cups / grams)
+      const uHead = document.createElement("div"); uHead.className = "ing-head";
+      [["cups", "cups"], ["grams", "g"]].forEach(function (o) {
+        const b = document.createElement("button"); b.type = "button"; b.className = "hcell" + (displayUnit === o[1] ? " on" : ""); b.textContent = o[0];
+        b.addEventListener("click", function () { displayUnit = o[1]; buildPage(); });
+        uHead.appendChild(b);
+      });
+      wrap.appendChild(uHead);
+
+      // header row: scale (1x / 2x / custom)
+      const amtUpdaters = [];                                   // live-refresh amount cells as the slider moves
+      function refreshAmounts() { amtUpdaters.forEach(function (f) { f(); }); }
+      const sHead = document.createElement("div"); sHead.className = "ing-head";
+      const isCustom = (scale !== 1 && scale !== 2);
+      [["1x", 1], ["2x", 2], [isCustom ? fmtScale(scale) : "custom", "custom"]].forEach(function (o) {
+        const on = (o[1] === "custom") ? (isCustom || scaleSliderOpen) : (scale === o[1]);
+        const b = document.createElement("button"); b.type = "button"; b.className = "hcell" + (on ? " on" : ""); b.textContent = o[0];
+        b.addEventListener("click", function (e) {
+          e.stopPropagation();   // don't let this click bubble to the "tap off to close" handler
+          if (o[1] === "custom") { scaleSliderOpen = !scaleSliderOpen; buildPage(); }   // toggle the inline slider
+          else { scale = o[1]; scaleSliderOpen = false; buildPage(); }
+        });
+        sHead.appendChild(b);
+      });
+      wrap.appendChild(sHead);
+
+      // custom-scale slider — only while open; tapping off closes it (the chosen scale stays applied)
+      if (scaleSliderOpen) wrap.appendChild(buildScaleSlider(refreshAmounts));
+
+      // ingredient rows
+      recipe.ingredients.forEach(function (ing, index) {
+        if (!ing || !(ing.name || "").trim()) return;   // skip blank rows in the read-only view (an amount-only "to taste" line keeps its name, so it stays)
+        const row = document.createElement("div"); row.className = "ing-line";
+        const amt = document.createElement("div"); amt.className = "il-amt";
+        function refreshAmt() {                                 // recompute this cell for the current scale/unit
+          const a = parseAmount(ing.amount) * scale;
+          const d = densityFor(ing.name);
+          if (displayUnit === 'cups') { const c = toCups(a, ing.unit, d); amt.textContent = (c == null) ? plainAmount(a, ing.unit) : fmtCups(c); }
+          else { const g = toGrams(a, ing.unit, d); amt.textContent = (g == null) ? plainAmount(a, ing.unit) : fmtGrams(g); }
+        }
+        refreshAmt(); amtUpdaters.push(refreshAmt);
+        const nm = document.createElement("div"); nm.className = "il-name"; nm.textContent = ing.name || "";
+        const noteCell = document.createElement("div"); noteCell.className = "il-note";
+        const noteBtn = document.createElement("button"); noteBtn.type = "button"; noteBtn.className = "notebtn" + (ing.note ? " has" : "");
+        noteBtn.innerHTML = NOTE_ICON;
+        const note = makeNote(
+          function () { return recipe.ingredients[index].note || ""; },
+          function (v) { recipe.ingredients[index].note = v; markDirty(); saveNow(); },
+          function () { noteBtn.classList.toggle("has", !!recipe.ingredients[index].note); }
+        );
+        noteBtn.addEventListener("click", function () { note.toggle(); });
+        noteCell.appendChild(noteBtn);
+        row.appendChild(amt); row.appendChild(nm); row.appendChild(noteCell);
+        wrap.appendChild(row); wrap.appendChild(note.el);
+      });
+      return wrap;
+    }
+    const NOTE_ICON = '<svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7z"/><path d="M12 3v4h4"/></svg>';
+    function stepNote(i) { return (recipe.stepNotes && recipe.stepNotes[i]) || ""; }
+    function setStepNote(i, v) { if (!recipe.stepNotes) recipe.stepNotes = []; recipe.stepNotes[i] = v; }
+    // a collapsible note: type + Enter (or click away) saves it, then it shows read-only until tapped again
+    function makeNote(getNote, setNote, refreshIcon) {
+      const area = document.createElement("div"); area.className = "note-area hidden";
+      let editing = false;
+      function draw() {
+        area.innerHTML = "";
+        const note = getNote();
+        if (editing || !note) {
+          const inp = document.createElement("textarea"); inp.className = "note-input"; inp.rows = 2;
+          inp.placeholder = "note"; inp.value = note || "";
+          inp.addEventListener("keydown", function (e) {
+            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); save(inp.value); }
+            else if (e.key === "Escape") { editing = false; if (!getNote()) area.classList.add("hidden"); draw(); }
+          });
+          inp.addEventListener("blur", function () { save(inp.value); });
+          area.appendChild(inp);
+          requestAnimationFrame(function () { inp.focus(); });
+        } else {
+          const t = document.createElement("div"); t.className = "note-text"; t.textContent = note; t.title = "click to edit";
+          t.addEventListener("click", function () { editing = true; draw(); });
+          area.appendChild(t);
+        }
+      }
+      function save(v) {
+        v = (v || "").trim();
+        if (v !== (getNote() || "")) { setNote(v); if (refreshIcon) refreshIcon(); }
+        editing = false;
+        area.classList.add("hidden");   // collapse after saving — reopen via the note icon
+        draw();
+      }
+      function toggle() {
+        if (area.classList.contains("hidden")) { area.classList.remove("hidden"); draw(); }
+        else area.classList.add("hidden");
+      }
+      return { el: area, toggle: toggle };
+    }
+
+    function renderEdit() {
+      // ---- name ----
+      const title = document.createElement("input");
+      title.className = "title"; title.value = recipe.name || ""; title.placeholder = "recipe name";
+      title.addEventListener("input", function () { recipe.name = title.value; markDirty(); });
+      app.appendChild(title);
+
+      // ---- description ----
+      const desc = document.createElement("textarea");
+      desc.className = "desc"; desc.rows = 2; desc.placeholder = "description...";
+      desc.value = recipe.description || "";
+      desc.addEventListener("input", function () { recipe.description = desc.value; markDirty(); });
+      app.appendChild(desc);
+
+      // ---- category (with a dropdown of existing categories) ----
+      const catLabel = document.createElement("label"); catLabel.textContent = "category"; app.appendChild(catLabel);
+      const picker = document.createElement("div"); picker.className = "cat-picker";
+      const cat = document.createElement("input");
+      cat.type = "text"; cat.autocomplete = "off"; cat.placeholder = "type or pick a category";
+      cat.value = recipe.category || "";
+      const dd = document.createElement("div"); dd.className = "cat-dropdown hidden";
+
+      function getCategories() {
+        const cats = [];
+        recipes.forEach(function (r) { if (r.category && cats.indexOf(r.category) === -1) cats.push(r.category); });
+        try { const stored = JSON.parse(localStorage.getItem("bakebook.categories"));
+          if (Array.isArray(stored)) stored.forEach(function (c) { if (cats.indexOf(c) === -1) cats.push(c); }); } catch (e) {}
+        cats.sort(); return cats;
+      }
+      // if a category already exists (ignoring case), reuse ITS spelling instead of creating a case-duplicate —
+      // matches the home screen's canonicalCategory (N1). Excludes this recipe so its own half-typed value can't
+      // match itself; only snaps when the existing spelling actually differs.
+      function canonicalCategory(name) {
+        const raw = (name == null ? "" : String(name)).trim();
+        if (!raw) return "";
+        const key = raw.toLowerCase();
+        const pool = [];
+        recipes.forEach(function (r) { if (r !== recipe && r.category) pool.push(r.category); });
+        try { const stored = JSON.parse(localStorage.getItem("bakebook.categories")); if (Array.isArray(stored)) stored.forEach(function (c) { pool.push(c); }); } catch (e) {}
+        for (let i = 0; i < pool.length; i++) {
+          const p = String(pool[i]).trim();
+          if (p.toLowerCase() === key && p !== raw) return p;
+        }
+        return raw;
+      }
+      function showCatDropdown() {
+        const term = cat.value.trim().toLowerCase();
+        const matches = getCategories().filter(function (c) { return c.toLowerCase().indexOf(term) !== -1; });
+        dd.innerHTML = "";
+        if (matches.length === 0) { dd.classList.add("hidden"); return; }
+        matches.forEach(function (c) {
+          const opt = document.createElement("div"); opt.className = "cat-option"; opt.textContent = c;
+          opt.addEventListener("mousedown", function (e) {
+            e.preventDefault(); cat.value = c; recipe.category = c; markDirty(); dd.classList.add("hidden");
+          });
+          dd.appendChild(opt);
+        });
+        dd.classList.remove("hidden");
+      }
+      cat.addEventListener("input", function () { recipe.category = cat.value; markDirty(); showCatDropdown(); });
+      cat.addEventListener("focus", showCatDropdown);
+      cat.addEventListener("blur", function () {
+        setTimeout(function () { dd.classList.add("hidden"); }, 150);
+        const canon = canonicalCategory(cat.value);   // snap to an existing category's spelling on commit (instant, like the home screen)
+        if (canon !== (recipe.category || "")) { recipe.category = canon; markDirty(); }
+        cat.value = canon;
+      });
+      picker.appendChild(cat); picker.appendChild(dd); app.appendChild(picker);
+
+      // ---- variations ----
+      if (recipe.parentId) {
+        // this recipe IS a variation — show a link back to its master
+        const master = recipes.find(function (r) { return r.id === recipe.parentId; });
+        const banner = document.createElement("div"); banner.className = "var-banner";
+        banner.textContent = "variation of " + (master ? master.name : "a recipe");
+        if (master) banner.addEventListener("click", function () {
+          if (dirty) saveNow();
+          location.href = "recipe.html?id=" + encodeURIComponent(master.id);
+        });
+        app.appendChild(banner);
+
+        // reorganize the hierarchy: promote this variation to its own recipe, or move it under a different master
+        const hier = document.createElement("div"); hier.className = "hier-row";
+        const standalone = document.createElement("button"); standalone.type = "button"; standalone.className = "hier-btn"; standalone.textContent = "make standalone recipe";
+        standalone.addEventListener("click", function () {
+          bbConfirm({
+            title: "make standalone?",
+            message: "“" + (recipe.name || "this recipe") + "” will become its own recipe and no longer be a variation.",
+            okLabel: "make standalone", cancelLabel: "cancel"
+          }).then(function (ok) {
+            if (!ok) return;
+            delete recipe.parentId; saveNow(); buildPage();
+          });
+        });
+        hier.appendChild(standalone);
+        const masters = recipes.filter(function (r) { return !r.parentId && r.id !== recipe.id && r.id !== recipe.parentId; });
+        if (masters.length) {
+          const moveSel = makeSelect(
+            [["", "move under…"]].concat(masters.map(function (m) { return [m.id, m.name || "untitled"]; })),
+            "", function (v) { if (v) { recipe.parentId = v; saveNow(); buildPage(); } }, { className: "hier-movesel" }
+          );
+          hier.appendChild(moveSel);
+        }
+        app.appendChild(hier);
+      } else {
+        // this recipe is a MASTER — list its variations and let you add one
+        const vTitle = document.createElement("div"); vTitle.className = "section-title"; vTitle.textContent = "variations";
+        app.appendChild(vTitle);
+        const vList = document.createElement("div"); app.appendChild(vList);
+        const variations = recipes.filter(function (r) { return r.parentId === recipe.id; });
+        if (variations.length === 0) {
+          const none = document.createElement("p"); none.className = "meta"; none.textContent = "no variations yet.";
+          vList.appendChild(none);
+        } else {
+          variations.forEach(function (v) {
+            const link = document.createElement("a"); link.className = "recipe-card";
+            link.href = "recipe.html?id=" + encodeURIComponent(v.id);
+            link.addEventListener("click", function () { if (dirty) saveNow(); });
+            const h3 = document.createElement("h3"); h3.textContent = v.name; link.appendChild(h3);
+            const meta = document.createElement("p"); meta.className = "meta";
+            meta.textContent = (v.ingredients ? v.ingredients.length : 0) + " ingredients  ·  " + (v.logs ? v.logs.length : 0) + " bakes";
+            link.appendChild(meta);
+            vList.appendChild(link);
+          });
+        }
+        // "add variation" reveals an inline name field (no browser popup)
+        const addVar = document.createElement("button"); addVar.className = "add"; addVar.id = "addVariationBtn"; addVar.type = "button"; addVar.textContent = "+ add variation";
+        const form = document.createElement("div"); form.id = "addVariationForm"; form.className = "hidden"; form.style.marginTop = "0.5rem";
+        const nameField = document.createElement("input"); nameField.id = "variationNameField"; nameField.type = "text"; nameField.placeholder = "variation name";
+        const createBtn = document.createElement("button"); createBtn.id = "createVariationBtn"; createBtn.className = "add"; createBtn.type = "button"; createBtn.textContent = "create variation"; createBtn.style.marginTop = "0.5rem";
+        const cancelBtn = document.createElement("button"); cancelBtn.className = "add"; cancelBtn.type = "button"; cancelBtn.textContent = "cancel";
+        cancelBtn.style.marginTop = "0.5rem"; cancelBtn.style.marginLeft = "0.5rem"; cancelBtn.style.background = "var(--muted)";
+        form.appendChild(nameField); form.appendChild(createBtn); form.appendChild(cancelBtn);
+
+        function createVariation() {
+          const name = nameField.value.trim() || (recipe.name + " variation");
+          const now = Date.now();
+          const variation = {
+            id: "r" + now + Math.random().toString(36).slice(2, 7),
+            parentId: recipe.id,                                  // links it to this master
+            name: name,
+            description: recipe.description || "",
+            category: recipe.category || "",
+            components: JSON.parse(JSON.stringify(recipe.components || [])),   // deep copy so edits don't touch the master
+            ingredients: [], steps: [], stepNotes: [],   // flattened mirror, filled just below
+            photos: [],
+            logs: [],
+            createdAt: now,
+            updatedAt: now
+          };
+          (variation.components || []).forEach(function (c) {
+            (c.ingredients || []).forEach(function (x) { variation.ingredients.push(x); });
+            (c.steps || []).forEach(function (x) { variation.steps.push(x); });
+            (c.stepNotes || []).forEach(function (x) { variation.stepNotes.push(x); });
+          });
+          if (dirty) saveNow();          // save any pending master edits first
+          recipes.push(variation);
+          try { localStorage.setItem("bakebook.recipes", JSON.stringify(recipes)); } catch (e) {}
+          dirty = false;
+          location.href = "recipe.html?id=" + encodeURIComponent(variation.id);   // open the new variation
+        }
+
+        addVar.addEventListener("click", function () {
+          addVar.classList.add("hidden"); form.classList.remove("hidden");
+          nameField.value = recipe.name + " variation"; nameField.focus(); nameField.select();
+        });
+        createBtn.addEventListener("click", createVariation);
+        nameField.addEventListener("keydown", function (e) { if (e.key === "Enter") createVariation(); });
+        cancelBtn.addEventListener("click", function () { form.classList.add("hidden"); addVar.classList.remove("hidden"); });
+
+        app.appendChild(addVar); app.appendChild(form);
+      }
+
+      // ---- components (cake / frosting …) ----
+      const etabs = renderComponentTabs(true); if (etabs) app.appendChild(etabs);
+
+      // ---- ingredients (editable rows + library) ----
+      const ingTitle = document.createElement("div");
+      ingTitle.className = "section-title"; ingTitle.textContent = "ingredients"; app.appendChild(ingTitle);
+      const ingHint = document.createElement("div"); ingHint.className = "dhint"; ingHint.textContent = "double-tap a row to edit · press & hold to drag it into a new spot"; app.appendChild(ingHint);
+      const ingBox = document.createElement("div"); app.appendChild(ingBox);
+      renderIngredients(ingBox);
+      const addIng = document.createElement("button");
+      addIng.className = "add"; addIng.textContent = "+ add ingredient";
+      addIng.addEventListener("click", function () {
+        recipe.ingredients.push({ amount: "", unit: (localStorage.getItem("bakebook.defaultUnit") || "g"), name: "" });
+        markDirty(); renderIngredients(ingBox, recipe.ingredients.length - 1);   // open the new row ready to type
+      });
+      app.appendChild(addIng);
+
+      // (ingredient library lives only in the "new recipe" form — not needed when editing an existing recipe)
+
+      // ---- method ----
+      const mTitle = document.createElement("div");
+      mTitle.className = "section-title"; mTitle.textContent = "method"; app.appendChild(mTitle);
+      const stepHint = document.createElement("div"); stepHint.className = "dhint"; stepHint.textContent = "double-tap a step to edit · press & hold to drag it into a new spot"; app.appendChild(stepHint);
+      const stepBox = document.createElement("div"); app.appendChild(stepBox);
+      renderSteps(stepBox);
+      const addStep = document.createElement("button");
+      addStep.className = "add"; addStep.textContent = "+ add step";
+      addStep.addEventListener("click", function () {
+        recipe.steps.push("");
+        if (recipe.stepNotes) recipe.stepNotes.push("");   // keep notes aligned to steps (drag reorders them by index)
+        markDirty(); renderSteps(stepBox, recipe.steps.length - 1);   // open the new step ready to type
+      });
+      app.appendChild(addStep);
+
+      // ---- photos ----
+      const pTitle = document.createElement("div");
+      pTitle.className = "section-title"; pTitle.textContent = "photos"; app.appendChild(pTitle);
+      const gallery = document.createElement("div"); gallery.className = "gallery"; app.appendChild(gallery);
+      renderPhotos(gallery);
+      const photoInput = document.createElement("input");
+      photoInput.type = "file"; photoInput.accept = "image/*"; photoInput.multiple = true;
+      photoInput.style.display = "none";
+      photoInput.addEventListener("change", function () {
+        Array.prototype.forEach.call(photoInput.files, function (f) {
+          fileToDataURL(f, 1000, 0.7, function (url) {
+            recipe.photos.push(url); markDirty(); renderPhotos(gallery);
+          });
+        });
+        photoInput.value = "";
+      });
+      const addPhotoBtn = document.createElement("button");
+      addPhotoBtn.className = "add"; addPhotoBtn.textContent = "+ add photo";
+      addPhotoBtn.addEventListener("click", function () { photoInput.click(); });
+      app.appendChild(photoInput); app.appendChild(addPhotoBtn);
+
+      // ---- save button ----
+      const saveBtn = document.createElement("button");
+      saveBtn.className = "saverecipe"; saveBtn.textContent = "save recipe";
+      saveBtn.addEventListener("click", function () {
+        // Guard the trap: if the "+ add variation" form is open, tapping the big "save recipe" would write
+        // the in-progress variation's edits onto THIS recipe. Intercept and make the choice explicit so a
+        // variation is never accidentally saved over its original.
+        const vform = document.getElementById("addVariationForm");
+        if (vform && !vform.classList.contains("hidden")) {
+          const vf = document.getElementById("variationNameField");
+          const vname = vf ? vf.value.trim() : "";
+          bbConfirm({
+            title: "finish your variation?",
+            message: "You have a variation" + (vname ? " “" + vname + "”" : "") + " in progress. Create it as a separate recipe? " +
+                     "(To save changes to THIS recipe instead, tap “cancel” on the variation first.)",
+            okLabel: "create variation", cancelLabel: "keep editing"
+          }).then(function (ok) {
+            if (ok) { const cb = document.getElementById("createVariationBtn"); if (cb) cb.click(); }
+            // "keep editing" → do nothing (never silently overwrite the original)
+          });
+          return;
+        }
+        const y = window.scrollY;                 // remember where the baker was editing…
+        saveNow(); editing = false; buildPage();
+        window.scrollTo(0, y);                     // …and stay there, so the fixed "saved ✓" shows at the TOP OF THE SCREEN instead of yanking the page to the top
+      });
+      app.appendChild(saveBtn);
+
+      // ---- log book button ----
+      const logBtn = document.createElement("button");
+      logBtn.className = "log";
+      logBtn.innerHTML = '<img src="logbook-icon.svg" alt="" style="height:1.15em;margin-right:.45em;vertical-align:-0.18em"> view log book';
+      logBtn.addEventListener("click", function () {
+        saveNow();   // save first so the log book sees the latest recipe
+        location.href = "logbook.html?id=" + encodeURIComponent(recipe.id);
+      });
+      app.appendChild(logBtn);
+
+      // butter now lives in the floating helper button (ensureButterFab), not inline here
+
+      // ---- delete recipe ----
+      const delBtn = document.createElement("button");
+      delBtn.className = "deleteRecipe"; delBtn.textContent = "delete recipe";
+      delBtn.addEventListener("click", function () {
+        const kids = recipes.filter(function (r) { return r.parentId === recipe.id; }).length;
+        const extra = kids ? " and its " + kids + " variation" + (kids > 1 ? "s" : "") : "";
+        bbConfirm({
+          title: "delete recipe?",
+          message: "“" + (recipe.name || "this recipe") + "”" + extra + " will be removed.",
+          okLabel: "delete", cancelLabel: "keep", danger: true
+        }).then(function (ok) {
+          if (!ok) return;
+          // remove this recipe AND any variations that belong to it (no orphans)
+          const removed = recipes.filter(function (r) { return r.id === recipe.id || r.parentId === recipe.id; });
+          // stash the removed recipes so the home screen can offer a few-second "undo" after we navigate there
+          try { sessionStorage.setItem("bakebook.undoDelete", JSON.stringify(removed)); } catch (e) {}
+          recipes = recipes.filter(function (r) { return r.id !== recipe.id && r.parentId !== recipe.id; });
+          try { localStorage.setItem("bakebook.recipes", JSON.stringify(recipes)); } catch (e) {}
+          dirty = false;   // don't warn about "unsaved changes" — we're deleting on purpose
+          location.href = "index.html";
+        });
+      });
+      app.appendChild(delBtn);
+    }
+
+    // ---- shared edit-row behaviours: double-tap to edit + drag ⠿ to reorder ----
+    // Fields render as protected text; a real edit needs a deliberate double-tap, so a stray tap can't change
+    // an amount or pop the keyboard. Reordering is drag-and-drop (replaces the tiny ▲▼ that sat next to delete).
+    function onActivateEdit(el, fn) {
+      let last = 0;
+      el.addEventListener("click", function (e) {                       // click fires on tap (touch) and click (mouse)
+        const now = Date.now();
+        if (now - last < 350) { e.preventDefault(); last = 0; fn(); } else last = now;   // two within 350ms = edit
+      });
+    }
+    // While a row is being edited, a tap anywhere outside it commits + returns to the protected text view.
+    function closeEditOnOutsideTap(row, exitEdit) {
+      function outside(ev) { if (!row.contains(ev.target)) { document.removeEventListener("pointerdown", outside, true); exitEdit(); } }
+      setTimeout(function () { document.addEventListener("pointerdown", outside, true); }, 0);
+      return function () { document.removeEventListener("pointerdown", outside, true); };
+    }
+    // Row reorder — long-press ANYWHERE on a row (~200ms) to pick it up (a quick swipe still scrolls the page,
+    // a quick double-tap still edits), or grab the ⠿ handle to start instantly. All move/up/cancel listeners
+    // live on WINDOW so a release is ALWAYS caught — a row can never get "stuck" lifted even if iOS drops the
+    // pointer capture. Re-measures each move to handle variable row heights (steps grow with their text);
+    // only the DOM order changes during the drag, and the data order is committed once on drop.
+    function makeRowDrag(box, arr, notes, rerender) {
+      return function armDrag(e, row, handle) {
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        if (row.querySelector(".rowedit:not(.hidden)")) return;          // this row is being edited — don't drag
+        if (e.target.closest && e.target.closest(".remove")) return;     // let the delete button work
+        const pid = e.pointerId, startX = e.clientX, startY = e.clientY;
+        const onHandle = handle && (handle === e.target || (handle.contains && handle.contains(e.target)));
+        let engaged = false, grabDY = 0, holdTimer = null;
+
+        function engage() {
+          holdTimer = null; engaged = true;
+          grabDY = startY - row.getBoundingClientRect().top;
+          row.classList.add("dragging");
+          try { row.setPointerCapture(pid); } catch (_) {}
+        }
+        function place(y) {                                              // keep the grabbed point under the finger
+          row.style.transform = "";
+          row.style.transform = "translateY(" + (y - grabDY - row.getBoundingClientRect().top) + "px)";
+        }
+        function onMove(ev) {
+          if (ev.pointerId !== pid) return;
+          if (!engaged) {   // still deciding: a real move means the user is scrolling/tapping → let go
+            if (!onHandle && (Math.abs(ev.clientX - startX) > 10 || Math.abs(ev.clientY - startY) > 10)) cleanup();
+            return;
+          }
+          ev.preventDefault();
+          const y = ev.clientY;
+          const sibs = Array.prototype.filter.call(box.children, function (c) { return c !== row; });
+          let before = null;
+          for (let k = 0; k < sibs.length; k++) {
+            const sr = sibs[k].getBoundingClientRect();
+            if (y < sr.top + sr.height / 2) { before = sibs[k]; break; }
+          }
+          if (before) { if (row.nextSibling !== before) box.insertBefore(row, before); }
+          else if (box.lastChild !== row) box.appendChild(row);
+          place(y);
+          const M = 72;                                                 // autoscroll the page near its edges
+          if (y < M) window.scrollBy(0, -14); else if (y > window.innerHeight - M) window.scrollBy(0, 14);
+        }
+        function onUp(ev) {
+          if (ev.pointerId !== pid) return;
+          const wasEngaged = engaged;
+          cleanup();
+          if (wasEngaged) commit();
+        }
+        function commit() {
+          row.classList.remove("dragging"); row.style.transform = "";
+          const order = Array.prototype.map.call(box.children, function (c) { return parseInt(c.dataset.idx, 10); });
+          if (!order.some(function (v, i) { return v !== i; })) return;  // a tap/hold with no move → nothing to save
+          const na = order.map(function (i) { return arr[i]; });
+          arr.length = 0; Array.prototype.push.apply(arr, na);
+          if (notes) { const nn = order.map(function (i) { return notes[i] != null ? notes[i] : ""; }); notes.length = 0; Array.prototype.push.apply(notes, nn); }
+          markDirty(); rerender();
+        }
+        function cleanup() {
+          if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+          window.removeEventListener("pointermove", onMove, true);
+          window.removeEventListener("pointerup", onUp, true);
+          window.removeEventListener("pointercancel", onUp, true);
+          try { row.releasePointerCapture(pid); } catch (_) {}
+          if (engaged) { row.classList.remove("dragging"); row.style.transform = ""; engaged = false; }
+        }
+        window.addEventListener("pointermove", onMove, { capture: true, passive: false });
+        window.addEventListener("pointerup", onUp, true);
+        window.addEventListener("pointercancel", onUp, true);
+        if (onHandle) engage(); else holdTimer = setTimeout(engage, 200);   // press-and-hold anywhere to lift the row
+      };
+    }
+    function dragHandle() {
+      const h = document.createElement("div"); h.className = "draghandle"; h.innerHTML = "⠿"; h.setAttribute("aria-hidden", "true");
+      return h;
+    }
+
+    // ---- draw the ingredient rows (protected text · double-tap to edit · drag ⠿ to reorder) ----
+    function renderIngredients(box, autoEdit) {
+      box.innerHTML = "";
+      const startDrag = makeRowDrag(box, recipe.ingredients, null, function () { renderIngredients(box); });
+      recipe.ingredients.forEach(function (ing, index) {
+        const row = document.createElement("div"); row.className = "row"; row.dataset.idx = index;
+
+        // protected display
+        const disp = document.createElement("div"); disp.className = "rowdisp"; disp.title = "double-tap to edit";
+        const dAmt = document.createElement("span"); dAmt.className = "d-amt";
+        const dName = document.createElement("span"); dName.className = "d-name";
+        function fillDisp() {
+          const amt = String(ing.amount == null ? "" : ing.amount).trim();
+          const u = ing.unit && ing.unit !== "each" ? " " + ing.unit : "";
+          dAmt.textContent = amt ? amt + u : "";
+          dName.textContent = ing.name || "name this ingredient";
+          dName.classList.toggle("placeholder", !ing.name);
+        }
+        disp.appendChild(dAmt); disp.appendChild(dName);
+
+        // edit fields (hidden until a double-tap)
+        const edit = document.createElement("div"); edit.className = "rowedit hidden";
+        const amount = document.createElement("input"); amount.className = "amount"; amount.inputMode = "decimal";
+        amount.value = ing.amount || ""; amount.placeholder = "amt";
+        amount.addEventListener("input", function () { ing.amount = amount.value; markDirty(); });
+        const unit = makeSelect(UNITS, ing.unit, function (v) { ing.unit = v; markDirty(); }, { className: "unit" });
+        const name = document.createElement("input"); name.className = "iname"; name.value = ing.name || ""; name.placeholder = "ingredient";
+        name.addEventListener("input", function () { ing.name = name.value; markDirty(); });
+        edit.appendChild(amount); edit.appendChild(unit); edit.appendChild(name);
+
+        let stopOutside = null;
+        function enterEdit() { disp.classList.add("hidden"); edit.classList.remove("hidden"); amount.focus(); stopOutside = closeEditOnOutsideTap(row, exitEdit); }
+        function exitEdit() { if (stopOutside) { stopOutside(); stopOutside = null; } fillDisp(); edit.classList.add("hidden"); disp.classList.remove("hidden"); }
+        onActivateEdit(disp, enterEdit);
+        edit.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); exitEdit(); } });
+
+        const del = document.createElement("button"); del.className = "remove"; del.textContent = "⊖"; del.title = "remove ingredient";
+        del.addEventListener("click", function () {
+          const removed = recipe.ingredients[index], at = index;
+          recipe.ingredients.splice(index, 1); markDirty(); renderIngredients(box);
+          showUndo("ingredient removed", function () { recipe.ingredients.splice(at, 0, removed); markDirty(); renderIngredients(box); });
+        });
+
+        fillDisp();
+        const handleEl = dragHandle();
+        row.addEventListener("pointerdown", function (e) { startDrag(e, row, handleEl); });   // hold anywhere on the row to drag
+        row.appendChild(handleEl); row.appendChild(disp); row.appendChild(edit); row.appendChild(del);
+        box.appendChild(row);
+        if (autoEdit === index) enterEdit();
+      });
+    }
+
+    // ---- draw the method steps (protected text · double-tap to edit · drag ⠿ to reorder) ----
+    function renderSteps(box, autoEdit) {
+      box.innerHTML = "";
+      const startDrag = makeRowDrag(box, recipe.steps, recipe.stepNotes, function () { renderSteps(box); });
+      recipe.steps.forEach(function (step, index) {
+        const row = document.createElement("div"); row.className = "row"; row.dataset.idx = index;
+
+        const num = document.createElement("div"); num.className = "stepnum"; num.textContent = (index + 1);
+
+        // protected display — shows the WHOLE step (wraps); double-tap to edit
+        const disp = document.createElement("div"); disp.className = "rowdisp"; disp.title = "double-tap to edit";
+        const dStep = document.createElement("span"); dStep.className = "d-step";
+        function fillDisp() {
+          dStep.textContent = recipe.steps[index] || "write this step";
+          dStep.classList.toggle("placeholder", !recipe.steps[index]);
+        }
+        disp.appendChild(dStep);
+
+        // edit: a textarea that grows to fit the full step (so a long step is never clipped while editing)
+        const edit = document.createElement("div"); edit.className = "rowedit stepedit hidden";
+        const text = document.createElement("textarea"); text.className = "steptext"; text.rows = 1; text.value = step || "";
+        function autogrow() { text.style.height = "auto"; text.style.height = text.scrollHeight + "px"; }
+        text.addEventListener("input", function () { recipe.steps[index] = text.value; autogrow(); markDirty(); });
+        edit.appendChild(text);
+
+        let stopOutside = null;
+        function enterEdit() { disp.classList.add("hidden"); edit.classList.remove("hidden"); text.focus(); autogrow(); stopOutside = closeEditOnOutsideTap(row, exitEdit); }
+        function exitEdit() { if (stopOutside) { stopOutside(); stopOutside = null; } fillDisp(); edit.classList.add("hidden"); disp.classList.remove("hidden"); }
+        onActivateEdit(disp, enterEdit);
+
+        const del = document.createElement("button"); del.className = "remove"; del.textContent = "⊖"; del.title = "remove step";
+        del.addEventListener("click", function () {
+          const removedStep = recipe.steps[index], removedNote = recipe.stepNotes ? recipe.stepNotes[index] : "", at = index;
+          recipe.steps.splice(index, 1);
+          if (recipe.stepNotes) recipe.stepNotes.splice(index, 1);
+          markDirty(); renderSteps(box);
+          showUndo("step removed", function () {
+            recipe.steps.splice(at, 0, removedStep);
+            if (recipe.stepNotes) recipe.stepNotes.splice(at, 0, removedNote || "");
+            markDirty(); renderSteps(box);
+          });
+        });
+
+        fillDisp();
+        const handleEl = dragHandle();
+        row.addEventListener("pointerdown", function (e) { startDrag(e, row, handleEl); });   // hold anywhere on the row to drag
+        row.appendChild(handleEl); row.appendChild(num); row.appendChild(disp); row.appendChild(edit); row.appendChild(del);
+        box.appendChild(row);
+        if (autoEdit === index) enterEdit();
+      });
+    }
+
+    // one photo thumbnail: tap-to-zoom, ✕ remove (with undo), and ‹ › reorder. Shared by the read-only
+    // view gallery AND the edit gallery — each passes how to persist + re-render (handlers.remove/move).
+    function photoThumbEl(url, index, total, handlers) {
+      const thumb = document.createElement("div"); thumb.className = "thumb";
+      const img = document.createElement("img"); img.src = url;
+      img.addEventListener("click", function () { openLightbox(index); });
+      thumb.appendChild(img);
+      const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "✕"; x.title = "remove photo";
+      x.addEventListener("click", function (e) { e.stopPropagation(); handlers.remove(index); });
+      thumb.appendChild(x);
+      if (total > 1) {
+        const l = document.createElement("button"); l.type = "button"; l.className = "mv mvl"; l.innerHTML = "‹"; l.title = "move left"; l.disabled = index === 0;
+        l.addEventListener("click", function (e) { e.stopPropagation(); handlers.move(index, -1); });
+        const r = document.createElement("button"); r.type = "button"; r.className = "mv mvr"; r.innerHTML = "›"; r.title = "move right"; r.disabled = index === total - 1;
+        r.addEventListener("click", function (e) { e.stopPropagation(); handlers.move(index, 1); });
+        thumb.appendChild(l); thumb.appendChild(r);
+      }
+      return thumb;
+    }
+
+    // ---- draw the photo thumbnails in EDIT mode (remove ✕ + reorder ‹ ›; saved on the Save button) ----
+    function renderPhotos(box) {
+      box.innerHTML = "";
+      recipe.photos.forEach(function (url, index) {
+        box.appendChild(photoThumbEl(url, index, recipe.photos.length, {
+          remove: function (i) {
+            const removed = recipe.photos[i];
+            recipe.photos.splice(i, 1); markDirty(); renderPhotos(box);
+            showUndo("photo removed", function () { recipe.photos.splice(i, 0, removed); markDirty(); renderPhotos(box); });
+          },
+          move: function (i, dir) { moveItem(recipe.photos, null, i, dir, function () { renderPhotos(box); }); }
+        }));
+      });
+    }
+
+    // ---- build the page (now that every helper, var, and function above is defined) ----
+    function startRecipe() {
+      recipes = loadRecipes();
+      recipe = recipes.find(function (r) { return r.id === id; });
+      if (!recipe) {
+        app.innerHTML = '<p class="notfound">hmm, that recipe wasn\'t found.<br>go back to <a href="index.html">my recipes</a>.</p>';
+      } else {
+        if (!recipe.photos) recipe.photos = [];
+        // migrate a flat recipe into a single default component (components = source of truth)
+        if (!recipe.components) {
+          recipe.components = [{ name: "", ingredients: recipe.ingredients || [], steps: recipe.steps || [], stepNotes: recipe.stepNotes || [] }];
+        }
+        setComp(0);
+        buildPage();
+      }
+    }
+    // wait for the cloud copy before drawing (so a fresh device shows your recipes)
+    if (window.bakebookWhenReady) bakebookWhenReady(startRecipe); else startRecipe();
+    // live updates from other devices — but never while the user is mid-edit
+    if (window.bakebookOnChange) bakebookOnChange(function () { if (!editing) startRecipe(); });
+
+    // configure bakebook+ billing for this signed-in user so the paywall can load plans on THIS page too
+    // (e.g. when opened from butter's upgrade link on a recipe) — same as the home page does.
+    try {
+      firebase.auth().onAuthStateChanged(function (u) {
+        if (u && window.bakebookBilling) { try { bakebookBilling.setUser(u.uid); } catch (e) {} }
+      });
+    } catch (e) {}
+  </script>
+</body>
+</html>

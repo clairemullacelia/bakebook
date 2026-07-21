@@ -1,0 +1,17 @@
+# dependencies
+node_modules/
+
+# secrets / local config
+.env
+.env.*
+*.local
+
+# build / platform output
+dist/
+ios/
+android/
+.firebase/
+
+# os / editor
+.DS_Store
+*.log

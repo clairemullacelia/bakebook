@@ -1,0 +1,2385 @@
+<!-- index.html — bakebook home, with two tabs: recipes & categories.
+     recipes tab   = all your recipes, searchable + sortable, with a "new recipe" form.
+     categories tab = the same recipes grouped into the categories you've made.
+     We switch tabs by hiding one view and showing the other. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>bakebook</title>
+  <link rel="stylesheet" href="styles.css?v=18">
+  <style>
+    /* body IS the full-height container: box-sizing:border-box absorbs the safe-area padding into
+       100dvh (so the page never exceeds the screen) and flex-column lets the footer pin to the bottom. */
+    body { margin: 0 auto; max-width: 480px; box-sizing: border-box; min-height: 100vh; min-height: 100dvh;
+      display: flex; flex-direction: column;
+      padding: calc(1.5rem + env(safe-area-inset-top, 0px)) 1.5rem calc(1.5rem + env(safe-area-inset-bottom, 0px)); }
+    h1 { text-align: center; font-size: 1.65rem; margin: 0.15rem 0 0.05rem; }   /* smaller, more subtle wordmark on the home pages */
+    .tagline { text-align: center; color: var(--terracotta-deep); margin: 0 0 1.1rem; font-size: 0.82rem; }
+
+    input, select, textarea { width: 100%; box-sizing: border-box; padding: 0.45rem 0.8rem;
+      border: 1px solid var(--field-line); border-radius: 10px; font-size: 1rem; font-family: inherit;
+      background: var(--card); color: var(--ink); }
+    .controls { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    .controls .search { flex: 1; }
+    .controls .sort { flex: 0 0 9.5rem; }   /* fixed width so the search bar never resizes when the sort label changes */
+    .controls .sort .sel-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    button.primary { padding: 0.4rem 1rem; font-size: 0.9rem; font-weight: 700; letter-spacing: 0.2px; color: var(--paper);
+      background: var(--terracotta-deep); border: none; border-radius: 999px; cursor: pointer;
+      box-shadow: 0 3px 10px rgba(165,83,63,.30);
+      transition: transform .12s ease, box-shadow .12s ease; }
+    button.primary:hover { background: #8F4634; transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(165,83,63,.38); }
+    .newbtn-wrap { text-align: center; margin: 0.5rem 0 1.5rem; }
+
+    /* create form */
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .form-title { font-size: 1.5rem; margin: 0 0 1.1rem; }
+    /* "+ new recipe" opens as a full-screen create screen (covers the recipes page, incl. butter) */
+    /* full-screen create screen. IMPORTANT: no CSS transform here — a transformed ancestor makes a
+       child's position:fixed anchor to THIS box instead of the viewport, which is what stranded the
+       "save recipe" button in the middle of the screen. We center with auto margins instead. */
+    #createForm { position: fixed; top: 0; bottom: 0; left: 0; right: 0;
+      max-width: 480px; z-index: 250; margin: 0 auto; border: none; border-radius: 0;
+      background: var(--paper); overflow-y: auto; box-sizing: border-box;
+      padding: calc(1.5rem + env(safe-area-inset-top, 0px)) 1.5rem calc(1.5rem + env(safe-area-inset-bottom, 0px)); }
+    /* keep "save recipe" floating at the bottom of the create screen so it's always in reach */
+    #createForm { padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px)); }
+    #saveButton { position: fixed; left: 50%; transform: translateX(-50%); z-index: 260;
+      bottom: calc(0.9rem + env(safe-area-inset-bottom, 0px)); width: calc(100% - 3rem); max-width: 432px;
+      box-shadow: 0 6px 22px rgba(90,50,30,.30); }
+    .createback { background: none; border: none; color: var(--terracotta-deep); font-size: 0.95rem;
+      cursor: pointer; padding: 0.45rem 0.6rem 0.45rem 0; margin-bottom: 0.5rem; }
+    .import-btn { display: block; width: 100%; margin: 0 0 0.5rem; padding: 0.48rem; font-weight: 700; font-size: 0.92rem;
+      color: var(--terracotta-deep); background: var(--card); border: 1.5px solid var(--terracotta); border-radius: 999px; cursor: pointer; }
+    .import-btn:hover { background: var(--cream); }
+    .import-link-btn { margin-top: 0.4rem; }   /* a little breathing room from the photo-import button above */
+    .import-url { margin: 0.1rem 0 0.5rem; }
+    .import-hint { font-size: 0.82rem; color: var(--muted); font-style: italic; margin: 0 0 1rem; min-height: 1.1em; }
+    label { display: block; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--muted); margin: 1rem 0 0.35rem; }
+    .section-title { font-family: var(--display); font-weight: 800; font-size: 1.15rem; color: var(--accent);
+      letter-spacing: -0.2px; border-top: 1px solid var(--border); padding-top: 1.1rem; margin: 1.6rem 0 0.7rem; }
+    .builder-row { display: flex; align-items: center; gap: 0.5rem; background: var(--card);
+      border: 1px solid var(--field-line); border-radius: 10px; padding: 0.5rem 0.75rem; margin-bottom: 0.5rem; }
+    .builder-row span { flex: 1; }
+    .remove { background: none; color: var(--danger); border: none; font-size: 1.2rem; cursor: pointer; padding: 0 0.25rem; line-height: 1; }
+    .inline { display: flex; gap: 0.5rem; }
+    .inline .amount { flex: 0 0 4.5rem; } .inline .unit { flex: 0 0 5rem; } .inline .iname { flex: 1; }
+    button.small { padding: 0.32rem 0.85rem; font-size: 0.86rem; font-weight: 700; color: var(--terracotta-deep); background: transparent; border: 1.5px solid var(--terracotta); border-radius: 999px; cursor: pointer; }
+    button.small:hover { background: var(--cream); }
+    .lib-card { border: 1px solid var(--border); border-radius: 10px; padding: 0.45rem 0.4rem; background: var(--paper);
+      display: flex; flex-direction: column; gap: 0.4rem; }
+    .lib-name { font-weight: 600; font-size: 0.92rem; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .lib-controls { display: flex; align-items: center; justify-content: space-between; gap: 0.2rem; }
+    .lib-card .wheel { width: 2.5rem; height: 2.4rem; }
+    .lib-card .sel-btn { padding: 0.35rem 0.4rem; font-size: 0.9rem; gap: 0.2rem; }
+    .lib-card .lib-unit { flex: 0 0 auto; }
+    /* iOS-style amount wheel: flick up to increase, down to decrease */
+    .wheel { position: relative; width: 3.4rem; height: 2.9rem; flex: 0 0 auto; overflow: hidden;
+      border: 1px solid var(--border); border-radius: 10px; background: var(--card);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      cursor: ns-resize; touch-action: none; user-select: none; -webkit-user-select: none;
+      transition: transform .12s ease; }
+    /* while scrolling/dragging: enlarge slightly + light up a bar across the current amount */
+    .wheel.grabbing { border-color: var(--terracotta); box-shadow: 0 0 0 3px rgba(190,111,93,.15); transform: scale(1.16); }
+    .wheel .wheel-val { font-weight: 700; font-size: 1rem; color: var(--ink); line-height: 1.05;
+      align-self: stretch; text-align: center; border-radius: 3px; }
+    .wheel.grabbing .wheel-val { background: rgba(190,111,93,.22); }
+    .wheel .wheel-ghost { font-size: 0.7rem; color: var(--muted); opacity: 0.5; line-height: 1.05; }
+    .wheel::before, .wheel::after { content: ""; position: absolute; left: 0; right: 0; height: 0.7rem; pointer-events: none; z-index: 1; }
+    .wheel::before { top: 0; background: linear-gradient(var(--card), rgba(255,252,247,0)); }
+    .wheel::after { bottom: 0; background: linear-gradient(rgba(255,252,247,0), var(--card)); }
+    .wheel.editing { border-color: var(--terracotta); }
+    .wheel.editing .wheel-val, .wheel.editing .wheel-ghost { display: none; }
+    .wheel-edit { width: 2.8rem; text-align: center; border: none; background: transparent; padding: 0;
+      font-weight: 700; font-size: 1rem; color: var(--ink); outline: none; font-family: var(--body); }
+    .wheel-edit:focus { box-shadow: none; }
+    .step { width: 28px; height: 28px; border: 1px solid var(--border); background: var(--card); border-radius: 10px; cursor: pointer; font-size: 1rem; line-height: 1; padding: 0; }
+    .lib-amt { width: 3.2rem; text-align: center; padding: 0.35rem; }
+    .lib-unit { width: auto; padding: 0.35rem; }
+    .lib-add { flex: 0 0 auto; width: 2rem; height: 2rem; padding: 0; font-weight: 700; font-size: 1.15rem; line-height: 1;
+      background: var(--terracotta-deep); color: var(--paper); border: none; border-radius: 50%; cursor: pointer; }
+    .lib-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem;
+      max-height: 320px; overflow-y: auto; margin-top: 0.5rem; padding-right: 0.25rem; }
+    .lib-amt { touch-action: none; }
+    button.save { display: block; width: 100%; margin-top: 1.25rem; padding: 0.62rem; font-size: 0.98rem; font-weight: 700; letter-spacing: 0.2px; color: var(--paper); background: var(--terracotta-deep); border: none; border-radius: 999px; cursor: pointer; box-shadow: 0 3px 10px rgba(165,83,63,.28); }
+
+    /* recipe cards */
+    a.recipe-card { display: block; text-decoration: none; color: inherit; background: var(--card);
+      border-radius: 10px; padding: 0.85rem 1.1rem; margin-bottom: 0.75rem; }
+    a.recipe-card:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+    a.recipe-card h3 { margin: 0 0 0.25rem; }
+    /* home photo-grid tiles */
+    .recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 0.9rem 0.6rem; }
+    a.recipe-tile { display: flex; flex-direction: column; text-decoration: none; color: inherit; }
+    .tile-photo { width: 100%; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden; box-shadow: var(--shadow-sm);
+      background: linear-gradient(135deg, var(--butter-pale), var(--tan)); display: flex; align-items: center; justify-content: center; }
+    .tile-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .tile-photo .ph { font-family: var(--display); font-weight: 600; font-size: 1.9rem; color: rgba(58,42,32,.6);
+      text-shadow: 0 1px 0 rgba(255,252,247,.65); }
+    .tile-title { font-weight: 700; font-size: 0.76rem; color: var(--heading); text-align: center; line-height: 1.2; margin-top: 0.35rem;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .tile-meta { margin-top: 0.15rem; font-size: 0.68rem; color: var(--accent); font-weight: 700; text-align: center; }
+    a.recipe-tile:hover .tile-photo { box-shadow: var(--shadow); }
+    .meta { color: var(--terracotta-deep); font-size: 0.85rem; margin: 0; }
+    .empty { text-align: center; color: var(--terracotta-deep); font-style: italic; padding: 1rem; }
+    /* first-run onboarding card (shown only when the account has no recipes yet) */
+    .onboard { text-align: center; max-width: 22rem; margin: 1.5rem auto 0; padding: 1.4rem 1.2rem;
+      background: var(--card); border: 1px solid #EFE7CB; border-radius: 16px; box-shadow: 0 4px 14px rgba(58,42,32,.07); }
+    .onboard-h { margin: 0 0 0.5rem; font-size: 1.2rem; color: var(--ink); }
+    .onboard-p { margin: 0 0 1.1rem; font-size: 0.9rem; color: var(--terracotta-deep); line-height: 1.55; }
+    .onboard .primary { margin: 0 auto 0.6rem; }
+    .linkbtn { background: none; border: none; color: var(--muted); font-size: 0.85rem; text-decoration: underline;
+      cursor: pointer; display: block; margin: 0 auto; padding: 0.3rem; }
+    .recipe-tile .tile-photo { position: relative; }
+    .sample-badge { position: absolute; top: 6px; left: 6px; background: rgba(253,252,250,0.9); color: var(--terracotta-deep);
+      font-size: 0.6rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 6px; border-radius: 999px; }
+    /* ---- drag-a-recipe-to-the-trash (long-press a tile, drag it onto the bin) ---- */
+    .trash-zone { position: fixed; left: 50%; bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+      transform: translateX(-50%) translateY(1rem); z-index: 3000; display: flex; flex-direction: column;
+      align-items: center; gap: 0.25rem; background: var(--card); border: 1.5px dashed var(--danger); color: var(--danger);
+      padding: 0.7rem 1.2rem; border-radius: 18px; box-shadow: var(--shadow); opacity: 0; pointer-events: none;
+      font-weight: 700; font-size: 0.78rem; transition: opacity .18s ease, transform .18s ease, background-color .15s, border-color .15s; }
+    .trash-zone svg { stroke: var(--danger); transition: stroke .15s; }
+    .trash-zone.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .trash-zone.hot { background: var(--danger); color: #fff; border-style: solid; transform: translateX(-50%) translateY(0) scale(1.14); }
+    .trash-zone.hot svg { stroke: #fff; }
+    .drag-ghost { position: fixed; z-index: 2999; border-radius: 10px; pointer-events: none; overflow: hidden;
+      box-shadow: 0 12px 30px rgba(40,25,15,.35); opacity: .94; transform: scale(1.06); transition: opacity .1s, transform .1s; }
+    .drag-ghost.doomed { opacity: .55; transform: scale(.82); }
+    .recipe-tile.lifting { opacity: .3; }
+    /* while a drag is possible, stop the browser's OWN behaviors from fighting ours: no text-selection,
+       no iOS press-and-hold callout, no native image "copy" drag. This makes the long-press drag clean. */
+    .recipe-tile { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-user-drag: none; }
+    .recipe-tile img, .drag-ghost img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
+    /* butter — a small round floating helper button, matching the one on the recipe page */
+    .butter-fab { position: fixed; left: 1rem; bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); z-index: 90;
+      width: 3.15rem; height: 3.15rem; border-radius: 50%; padding: 0; text-decoration: none;
+      background: var(--card); border: 1px solid #EFE7CB; box-shadow: 0 4px 14px rgba(58,42,32,.16); cursor: grab;
+      display: flex; align-items: center; justify-content: center;
+      touch-action: none; -webkit-user-select: none; user-select: none; -webkit-user-drag: none;
+      transition: left .22s cubic-bezier(.22,1,.36,1), top .22s cubic-bezier(.22,1,.36,1), transform .22s cubic-bezier(.22,1,.36,1), opacity .18s ease; }
+    .butter-fab:hover { border-color: var(--terracotta); background: #FFFDF7; }
+    .butter-fab.dragging { transition: none; cursor: grabbing; box-shadow: 0 8px 22px rgba(58,42,32,.26); }
+    .butter-fab.tucked { opacity: .5; }
+    .butter-fab.tucked:hover { opacity: 1; }
+    .butter-fab.tuck-left { transform: translateX(-62%); }
+    .butter-fab.tuck-right { transform: translateX(62%); }
+    .butter-fab img { height: 1.7rem; width: 1.7rem; display: block; pointer-events: none; -webkit-user-drag: none; }
+    /* the footer below handles bottom spacing now, so only a small gap here */
+    #recipeList { padding-bottom: 0.5rem; }
+    .recipe-counter { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 0.4rem 1rem 1.4rem; }
+    .recipe-counter a { color: var(--terracotta-deep); font-weight: 700; text-decoration: none; }
+    /* butter popup — a bottom sheet over the home page */
+    .butter-sheet { position: fixed; inset: 0; z-index: 300; }
+    .butter-sheet-backdrop { position: absolute; inset: 0; background: rgba(40,25,15,.34); }
+    .butter-sheet-panel { position: absolute; left: 0; right: 0; bottom: 0; height: 90vh; max-width: 480px; margin: 0 auto;
+      background: #FFFDF5; border-radius: 16px 16px 0 0; box-shadow: 0 -8px 30px rgba(40,25,15,.28);
+      display: flex; flex-direction: column; overflow: hidden; }
+    .butter-sheet-head { position: relative; height: 46px; flex: none; touch-action: none; cursor: grab; }
+    .butter-sheet-close { position: absolute; left: 10px; top: 9px; background: none; border: none; cursor: pointer; color: var(--muted); padding: 4px; display: flex; }
+    .butter-sheet-grip { position: absolute; left: 50%; top: 17px; transform: translateX(-50%); width: 46px; height: 5px;
+      border-radius: 2px; background: #E0D3BC; }
+    .butter-sheet-expand { position: absolute; right: 12px; top: 11px; background: none; border: none; cursor: pointer;
+      color: var(--butter-blue); padding: 2px; }
+    .butter-sheet-frame { flex: 1; width: 100%; border: none; }
+    .filterchip { display: inline-block; background: var(--card); border: 1px solid var(--field-line); color: var(--ink); border-radius: 999px;
+      padding: 0.3rem 0.8rem; margin-bottom: 1rem; font-size: 0.9rem; cursor: pointer; }
+
+    /* ---- inline "by category" view (picked from the sort dropdown) ---- */
+    /* small "+ new category" control shown above the category rows */
+    /* Normal browsing: small bottom padding matching the other sort views (no dead space).
+       Only WHILE a recipe tile is being dragged do we reserve the big room below the last category, so it
+       can scroll fully ABOVE the fixed trash band and still be a drop target (body.bb-tile-dragging is set
+       by the tile-drag logic for the duration of a drag). */
+    .bycat { padding-bottom: 0.5rem; }
+    /* The by-category list IS #recipeList (the .bycat class is set on that same element), so this rule must
+       out-specify the base `#recipeList { padding-bottom: 0.5rem }` (an ID selector) to take effect during a
+       drag — hence #recipeList here, not just .bycat. */
+    body.bb-tile-dragging #recipeList.bycat { padding-bottom: calc(7rem + env(safe-area-inset-bottom, 0px)); }
+    .bycat-head { margin-bottom: 0.9rem; }
+    .bycat-newcat { background: none; border: none; color: var(--terracotta-deep); font-size: 0.9rem; font-weight: 700;
+      cursor: pointer; padding: 0; }
+    .bycat-newcat:hover { text-decoration: underline; }
+    /* each category = a tappable header + a swipeable carousel (or a full grid when expanded) */
+    .cat-group { margin-bottom: 1.3rem; border-radius: 10px; transition: background .12s, box-shadow .12s; }
+    /* "hot" drop-target while a recipe tile is dragged over this category (mirrors the trash hot state) */
+    .cat-group.drop-hot { background: var(--cream); box-shadow: 0 0 0 2px var(--terracotta-deep); }
+    /* whole header row is one big, easy-to-tap control (>=44px touch height) */
+    .cat-group-head { display: flex; align-items: center; gap: 0.5rem; width: 100%; min-height: 44px; box-sizing: border-box;
+      background: none; border: none; cursor: pointer; padding: 0.3rem 0.1rem 0.4rem; text-align: left;
+      border-radius: 8px; -webkit-tap-highlight-color: transparent; }
+    .cat-group-head:not(.is-empty):hover,
+    .cat-group-head:not(.is-empty):active { background: var(--cream); }
+    .cat-group-head.is-empty { cursor: default; }
+    .cat-group-name { font-family: var(--display); font-weight: 700; font-size: 1.05rem; color: var(--heading); }
+    .cat-group-count { color: var(--accent); font-size: 0.78rem; font-weight: 700; }
+    /* clear "see all" / "collapse" affordance, right-aligned, with a chevron cue */
+    .cat-group-seeall { margin-left: auto; display: inline-flex; align-items: center; gap: 0.25rem;
+      color: var(--terracotta-deep); font-size: 0.82rem; font-weight: 700; }
+    .cat-group-chev { color: var(--terracotta-deep); font-size: 1.4rem; font-weight: 700; line-height: 1; transition: transform .15s ease; }
+    .cat-group-head.open .cat-group-chev { transform: rotate(180deg); }
+    .cat-group-empty { color: var(--muted); font-size: 0.85rem; margin: 0 0 0.2rem; font-style: italic; }
+    /* horizontal, swipeable row of recipe cards; each tile keeps a fixed width so the row scrolls */
+    .cat-carousel { display: flex; gap: 0.6rem; overflow-x: auto; -webkit-overflow-scrolling: touch;
+      scroll-snap-type: x proximity; padding-bottom: 0.3rem; }
+    .cat-carousel::-webkit-scrollbar { display: none; }
+    .cat-carousel { scrollbar-width: none; }
+    .cat-carousel .recipe-tile { flex: 0 0 auto; width: 92px; scroll-snap-align: start; }
+    .cat-picker { position: relative; }
+    .cat-dropdown { position: absolute; left: 0; right: 0; top: 100%; z-index: 50; background: var(--card);
+      border: 1px solid var(--border); border-radius: 10px; margin-top: 2px; max-height: 180px; overflow-y: auto;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    .cat-option { padding: 0.5rem 0.75rem; cursor: pointer; }
+    .cat-option:hover { background: var(--cream); }
+    /* custom dropdown — replaces native <select>, which the OS draws dark & oversized */
+    .sel { position: relative; display: inline-block; }
+    .sel-btn { display: flex; align-items: center; gap: 0.4rem; width: 100%; box-sizing: border-box;
+      padding: 0.45rem 0.8rem; border: 1px solid var(--field-line); border-radius: 10px; background: var(--card);
+      color: var(--ink); font-family: inherit; font-size: 1rem; cursor: pointer; }
+    .sel-btn:hover { border-color: var(--terracotta); }
+    .sel-label { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sel-caret { color: var(--terracotta-deep); font-size: 0.75rem; }
+    .sel-list { position: absolute; left: 0; top: 100%; z-index: 60; margin-top: 3px;
+      min-width: 100%; width: max-content; max-width: 16rem;
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      box-shadow: 0 6px 18px rgba(58,42,32,.16); max-height: 240px; overflow-y: auto; }
+    .sel-opt { padding: 0.5rem 0.75rem; cursor: pointer; font-size: 0.95rem; white-space: nowrap; }
+    .sel-opt:hover { background: var(--cream); }
+    .sel-opt.on { color: var(--terracotta-deep); font-weight: 700; }
+    .hidden { display: none !important; }
+    /* appRoot just flexes to fill the body; footer (margin-top:auto) drops to the bottom when content
+       is short, and appRoot grows (page scrolls) only when there are enough recipes to overflow. */
+    #appRoot { box-sizing: border-box; display: flex; flex-direction: column; flex: 1 0 auto; }
+    /* full sign-in page (shown when logged out) — matches Claire's design */
+    .login-screen { position: fixed; inset: 0; z-index: 200; padding: 1.25rem; overflow: auto;
+      display: flex; align-items: center; justify-content: center;
+      background-color: #EEE1C2;
+      background-image:
+        repeating-linear-gradient(45deg,  rgba(176,92,73,.40) 0 66px, transparent 66px 150px),
+        repeating-linear-gradient(135deg, rgba(176,92,73,.40) 0 66px, transparent 66px 150px),
+        repeating-linear-gradient(45deg,  rgba(150,70,55,.20) 0 132px, transparent 132px 300px),
+        repeating-linear-gradient(135deg, rgba(232,205,140,.52) 0 26px, transparent 26px 150px),
+        repeating-linear-gradient(45deg,  rgba(232,205,140,.46) 0 26px, transparent 26px 150px); }
+    .login-card { width: 100%; max-width: 360px; text-align: center;
+      background: rgba(250,244,233,.92); border-radius: 22px; padding: 2.6rem 1.7rem 2rem;
+      box-shadow: 0 12px 40px rgba(90,50,30,.16); }
+    .login-wordmark { font-family: var(--body); font-weight: 800; font-size: 2.9rem; letter-spacing: -1px;
+      margin: 0 0 1.5rem; color: var(--espresso); }
+    .login-error { color: var(--danger); font-family: var(--body); font-size: .85rem; min-height: 1.1em; margin: 0 0 .5rem; }
+    .login-field { display: flex; align-items: center; gap: .45rem; background: #fff;
+      border: 1px solid #D8C6A8; border-radius: 999px; padding: .44rem .95rem; margin: 0 0 .55rem; }
+    .login-field svg { flex: none; color: #8A6F52; }
+    /* padding:0 !important resets the GLOBAL input{padding:.45rem} rule — otherwise the input's own
+       padding stacks INSIDE the pill's padding and makes these fields taller than the buttons below. */
+    .login-field input { flex: 1; min-width: 0; border: none; outline: none; background: none;
+      padding: 0 !important; height: auto;
+      /* font-size must be >= 16px: iOS auto-zooms the whole page in when you focus an input
+         smaller than that, and in the in-app webview it can then get "stuck" zoomed. */
+      font-family: var(--body); font-size: 1rem; color: var(--ink); font-style: italic; }
+    .login-primary { display: block; width: 100%; margin: .7rem 0 .9rem; font-family: var(--body);
+      font-size: .9rem; font-weight: 700; letter-spacing: .2px; color: #fff; background: #C9836F; border: 1px solid transparent; border-radius: 999px;
+      padding: .44rem 1rem; cursor: pointer; box-shadow: 0 3px 9px rgba(160,90,70,.26); }
+    .login-primary:hover { background: #bd7361; }
+    .login-social { position: relative; display: flex; align-items: center; justify-content: center; width: 100%;
+      background: #FFFEFB; border: 1px solid #D8C6A8; border-radius: 999px; padding: .44rem 1rem; margin: 0 0 .45rem;
+      font-family: var(--body); font-size: .9rem; color: var(--ink); font-style: italic; cursor: pointer; }
+    .login-social:hover { background: #fff; }
+    .login-social .soc-icon { position: absolute; left: 1.1rem; top: 50%; transform: translateY(-50%); display: flex; }
+    .login-apple { background: #000; border-color: #000; color: #fff; font-style: normal; font-weight: 600; }
+    .login-apple:hover { background: #111; }
+    .login-forgot { margin: -.45rem 0 1.15rem; }   /* pull it up snug under the "log in" button and add clear space below, so it reads as belonging to log-in — not to "Sign in with Apple" */
+    .login-forgot a { color: var(--muted); font-size: .82rem; text-decoration: underline; cursor: pointer; }
+    .login-switch { font-family: var(--body); font-size: .95rem; color: var(--ink); margin: 1.3rem 0 0; }
+    .login-switch a { color: var(--terracotta-deep); font-weight: 700; cursor: pointer; text-decoration: underline; }
+    .login-legal { margin: 0.6rem 0 0; }
+    .login-legal a { color: var(--muted); font-size: 0.8rem; text-decoration: underline; }
+    /* small legal footer inside the app. It flows right after the content by default (so a short
+       categories/folder page has no big gap), and only PINS to the bottom on the recipes tab, where
+       the fixed butter bar already anchors the bottom of the screen. */
+    .applegal { text-align: center; padding: 1.5rem 0 1.25rem; }
+    .applegal { margin-top: auto; }   /* pin the footer to the bottom on EVERY tab (was recipes-only, so it floated mid-page on categories) */
+    /* only the recipes tab shows the fixed butter bar, so give the column extra bottom room there
+       so the footer clears the bar instead of hiding behind it. The bar sits a FIXED distance from
+       the true screen bottom (not safe-area-adjusted), but body already adds the safe-area inset to
+       its bottom padding — so we SUBTRACT that inset back out here, keeping the footer a constant
+       gap above the bar on both web (no inset) and device (big inset). Fixes the "footer too high". */
+    #appRoot.tab-recipes { padding-bottom: 0.5rem; }
+    /* Only reserve the extra clearance that keeps the footer above the fixed butter bar WHILE the bubble
+       actually rests at/near its default bottom spot (body.butter-atbottom, set by the bubble logic). Once
+       the bubble is dragged up or tucked to a side, the bar no longer anchors the bottom, so drop the gap. */
+    body.butter-atbottom #appRoot.tab-recipes { padding-bottom: max(0.5rem, calc(2.75rem - env(safe-area-inset-bottom, 0px))); }
+    .applegal a { color: var(--muted); font-size: 0.8rem; text-decoration: underline; cursor: pointer; }
+    .footdot { color: var(--muted); font-size: 0.8rem; margin: 0 0.55rem; }
+    .applegal a.footdanger { color: var(--danger); }
+    /* ---- settings: a gear top-right + a bottom-sheet of options ---- */
+    .settings-gear { position: fixed; top: calc(0.5rem + env(safe-area-inset-top, 0px)); right: 0.7rem; z-index: 130;
+      background: none; border: none; padding: 0.4rem; cursor: pointer; color: var(--muted); }
+    .settings-gear svg { display: block; width: 23px; height: 23px; }
+    .settings-gear:hover { color: var(--terracotta-deep); }
+    .settings-sheet { position: fixed; inset: 0; z-index: 3500; }
+    .settings-backdrop { position: absolute; inset: 0; background: rgba(40,25,15,.4); opacity: 0; transition: opacity .18s ease; }
+    .settings-sheet.show .settings-backdrop { opacity: 1; }
+    .settings-panel { position: absolute; left: 0; right: 0; bottom: 0; max-width: 480px; margin: 0 auto;
+      background: var(--paper); border-radius: 22px 22px 0 0; box-shadow: 0 -12px 40px rgba(40,25,15,.28);
+      padding: 1rem 1.25rem calc(1.4rem + env(safe-area-inset-bottom, 0px)); box-sizing: border-box;
+      transform: translateY(100%); transition: transform .22s ease; max-height: 90vh; overflow: auto; }
+    .settings-sheet.show .settings-panel { transform: translateY(0); }
+    .settings-grip { width: 40px; height: 4px; border-radius: 2px; background: #E3DDD3; margin: 0 auto .8rem; }
+    .settings-close { position: absolute; right: 14px; top: 12px; background: none; border: none; color: var(--muted); font-size: 1.3rem; cursor: pointer; line-height: 1; }
+    .settings-h { font-family: var(--display); font-weight: 800; font-size: 1.3rem; color: var(--heading); text-align: center; margin: .1rem 0 1rem; letter-spacing: -.3px; }
+    .settings-row { display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+      padding: .8rem 0; border-bottom: 1px solid var(--border); }
+    .settings-label { font-weight: 800; color: var(--heading); font-size: .98rem; }
+    .settings-meta { font-size: .8rem; color: var(--muted); margin-top: .1rem; }
+    .settings-cta { background: var(--terracotta-deep); color: #fff; border: none; border-radius: 999px; padding: .4rem .95rem; font-weight: 800; font-size: .85rem; cursor: pointer; font-family: var(--body); }
+    .settings-cta.member { background: var(--accent-tint); color: var(--terracotta-deep); cursor: default; }
+    .settings-seg { display: inline-flex; background: var(--cream); border-radius: 999px; padding: 2px; }
+    .settings-seg button { border: none; background: none; border-radius: 999px; padding: .3rem .8rem; font-weight: 700; font-size: .82rem; color: var(--muted); cursor: pointer; font-family: var(--body); }
+    .settings-seg button.on { background: var(--card); color: var(--heading); box-shadow: var(--shadow-sm); }
+    .settings-link { display: block; padding: .85rem 0; border-bottom: 1px solid var(--border); color: var(--terracotta-deep); font-weight: 700; font-size: .95rem; text-decoration: none; }
+    .settings-account { display: flex; justify-content: space-between; align-items: center; padding: 1rem 0 .2rem; }
+    .settings-signout { color: var(--terracotta-deep); font-weight: 700; font-size: .95rem; cursor: pointer; text-decoration: underline; }
+    .settings-delete { color: var(--danger); font-weight: 700; font-size: .9rem; cursor: pointer; text-decoration: underline; }
+    /* boot loading screen — shown instantly so there's never a blank gap while auth resolves */
+    #bootScreen { position: fixed; inset: 0; z-index: 500; display: flex; align-items: center; justify-content: center;
+      background-color: #EFE3C2; font-family: var(--body); font-weight: 800; font-size: 2.6rem; letter-spacing: -1px;
+      color: var(--espresso); }
+  </style>
+</head>
+<body>
+  <!-- instant loading screen so there's never a blank gap before Firebase auth answers -->
+  <div id="bootScreen">bakebook</div>
+
+  <!-- sign-in page: shown until you're logged in -->
+  <div id="loginScreen" class="login-screen hidden">
+    <div class="login-card">
+      <h1 class="login-wordmark">bakebook</h1>
+      <p id="loginError" class="login-error"></p>
+
+      <label class="login-field">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+        <input id="loginEmail" type="email" placeholder="e-mail" autocomplete="email">
+      </label>
+
+      <label class="login-field">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+        <input id="loginPassword" type="password" placeholder="password" autocomplete="current-password">
+      </label>
+
+      <label class="login-field hidden" id="confirmField">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+        <input id="loginConfirm" type="password" placeholder="confirm password" autocomplete="new-password">
+      </label>
+
+      <button id="loginPrimaryBtn" class="login-primary">log in</button>
+      <p class="login-forgot" id="forgotWrap"><a id="forgotLink">forgot password?</a></p>
+
+      <button id="loginAppleBtn" class="login-social login-apple hidden">
+        <span class="soc-icon">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M16.36 12.78c.02 2.44 2.14 3.25 2.16 3.26-.02.05-.34 1.17-1.12 2.32-.67 1-1.37 1.99-2.47 2.01-1.08.02-1.43-.64-2.67-.64-1.24 0-1.62.62-2.65.66-1.06.04-1.87-1.08-2.55-2.07-1.39-2.02-2.45-5.71-1.02-8.2.71-1.24 1.98-2.02 3.36-2.04 1.04-.02 2.02.7 2.66.7.63 0 1.83-.87 3.09-.74.53.02 2 .21 2.95 1.61-.08.05-1.76 1.03-1.74 3.07M14.3 5.6c.56-.68.94-1.62.84-2.56-.81.03-1.79.54-2.37 1.22-.52.6-.98 1.56-.86 2.48.9.07 1.83-.46 2.39-1.14"/></svg>
+        </span>
+        Sign in with Apple
+      </button>
+
+      <button id="loginGoogleBtn" class="login-social">
+        <span class="soc-icon">
+          <svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          </svg>
+        </span>
+        login with Google
+      </button>
+
+      <p class="login-switch"><span id="loginSwitchText">don't have an account? </span><a id="loginToggle">sign up!</a></p>
+      <p class="login-legal"><a href="privacy.html">privacy &amp; terms</a></p>
+    </div>
+  </div>
+
+  <!-- the app itself, revealed once you're signed in -->
+  <div id="appRoot" class="hidden tab-recipes">
+
+  <!-- settings gear (top-right) -->
+  <button id="settingsBtn" class="settings-gear" title="settings" aria-label="settings">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
+
+  <h1 class="wordmark">bakebook</h1>
+  <p class="tagline">store. develop. bake.</p>
+
+  <!-- ===== HOME (recipes) ===== -->
+  <div id="recipesView">
+    <div class="controls">
+      <input class="search" id="recipeSearch" type="text" placeholder="search my recipes">
+      <div class="sort" id="sortMount"></div>
+    </div>
+
+    <div id="filterChipWrap"></div>
+
+    <div class="newbtn-wrap">
+      <button class="primary" id="newRecipeBtn">+ new recipe</button>
+    </div>
+
+    <!-- create form (hidden until "new recipe") -->
+    <div class="card hidden" id="createForm">
+      <button type="button" class="createback" id="createBack">← recipes</button>
+      <h2 class="form-title">new recipe</h2>
+      <button type="button" class="import-btn" id="importPhotoBtn">import from photos</button>
+      <input type="file" id="importPhotoInput" accept="image/*" multiple style="display:none">
+      <button type="button" class="import-btn import-link-btn" id="importUrlBtn">import from a link</button>
+      <input type="url" id="importUrlInput" class="import-url hidden" placeholder="paste your link, then press enter">
+      <p class="import-hint" id="importStatus"></p>
+      <label for="nameInput">recipe name</label>
+      <input id="nameInput" type="text" placeholder="">
+
+      <label for="descInput">description</label>
+      <textarea id="descInput" rows="2" placeholder=""></textarea>
+
+      <label for="categoryInput">category</label>
+      <div class="cat-picker">
+        <input id="categoryInput" type="text" autocomplete="off" placeholder="type or pick a category">
+        <div class="cat-dropdown hidden" id="categoryDropdown"></div>
+      </div>
+
+      <div class="section-title">ingredients</div>
+      <div id="ingredientList"></div>
+      <div class="inline">
+        <input class="amount" id="ingAmount" type="text" placeholder="">
+        <div class="unit" id="ingUnitMount"></div>
+        <input class="iname" id="ingName" type="text" placeholder="">
+      </div>
+      <button class="small" id="addIngredient" style="margin-top:0.5rem;">+ add ingredient</button>
+      <div class="section-title">ingredient library</div>
+      <input id="librarySearch" type="text" placeholder="search ingredients">
+      <div id="libraryGrid" class="lib-grid"></div>
+
+      <div class="section-title">method</div>
+      <ol id="stepList" style="padding-left:1.1rem; margin:0;"></ol>
+      <textarea id="stepInput" placeholder="add a step" rows="1" style="margin-top:0.5rem; resize:none; overflow:hidden;"></textarea>
+      <button class="small" id="addStep" style="margin-top:0.5rem;">+ add step</button>
+
+      <button class="save" id="saveButton">save recipe</button>
+    </div>
+
+    <div id="recipeList"></div>
+    <div id="recipeCounter" class="recipe-counter" style="display:none" aria-live="polite"></div>
+
+    <a class="butter-fab" id="butterBar" href="butter.html" title="ask butter" aria-label="ask butter"><img class="butter-logo" src="butter-logo.svg" alt="ask butter"></a>
+  </div>
+
+  <div class="applegal"><a href="privacy.html">privacy &amp; terms</a><span class="footdot">·</span><a id="settingsFootLink" role="button" tabindex="0">settings</a></div>
+
+  <!-- settings bottom-sheet -->
+  <div id="settingsSheet" class="settings-sheet hidden">
+    <div class="settings-backdrop" id="settingsBackdrop"></div>
+    <div class="settings-panel">
+      <button class="settings-close" id="settingsClose" aria-label="close">✕</button>
+      <div class="settings-grip"></div>
+      <h2 class="settings-h">settings</h2>
+
+      <div class="settings-row">
+        <div><div class="settings-label">bakebook+</div><div class="settings-meta" id="planMeta">free plan</div></div>
+        <button class="settings-cta" id="planCta">upgrade</button>
+      </div>
+
+      <div class="settings-row">
+        <div><div class="settings-label">default units</div><div class="settings-meta">for new ingredients</div></div>
+        <div class="settings-seg" id="unitSeg">
+          <button type="button" data-u="g">grams</button><button type="button" data-u="cups">cups</button>
+        </div>
+      </div>
+
+      <div class="settings-account">
+        <a id="signOutBtn" role="button" tabindex="0" class="settings-signout">sign out</a>
+        <a id="deleteAccountBtn" role="button" tabindex="0" class="settings-delete">delete account</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- trash drop-zone: appears while you drag a recipe tile; drop on it to delete -->
+  <div id="trashZone" class="trash-zone" aria-hidden="true">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"/><path d="M10 11v6M14 11v6"/></svg>
+    <span>drop to delete</span>
+  </div>
+
+  <!-- butter popup (bottom sheet) -->
+  <div id="butterSheet" class="butter-sheet hidden">
+    <div class="butter-sheet-backdrop" id="butterBackdrop"></div>
+    <div class="butter-sheet-panel">
+      <div class="butter-sheet-head">
+        <button class="butter-sheet-close" id="butterClose" title="close" aria-label="close butter"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>
+        <span class="butter-sheet-grip"></span>
+        <a class="butter-sheet-expand" href="butter.html" title="open full screen" aria-label="open full screen">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
+        </a>
+      </div>
+      <iframe id="butterFrame" class="butter-sheet-frame" title="butter"></iframe>
+    </div>
+  </div>
+  </div><!-- /appRoot -->
+
+  <!-- Firebase: the app core + sign-in module, loaded from Google's CDN -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
+  <script src="firebase-init.js"></script>
+  <script src="bakebook-store.js"></script>
+  <script src="bakebook-billing.js"></script>
+  <script>
+    // ---------- sign in (Google + email/password) ----------
+    const auth = firebase.auth();
+    const googleProvider = new firebase.auth.GoogleAuthProvider();
+    const loginError = document.getElementById("loginError");
+
+    function showLoginError(e) {
+      // Firebase errors read like "Firebase: <message> (auth/…)." — trim to the friendly part.
+      let m = (e && e.message) ? e.message : String(e);
+      m = m.replace(/^Firebase:\s*/, "").replace(/\s*\(auth\/[^)]*\)\.?$/, "");
+      loginError.style.color = "";   // back to the red error color (a success note may have turned it green)
+      loginError.textContent = m;
+    }
+
+    // "forgot password?" — email a reset link to whatever's in the email field
+    document.getElementById("forgotLink").addEventListener("click", function () {
+      const email = document.getElementById("loginEmail").value.trim();
+      if (!email) { showLoginError("enter your email above first, then tap “forgot password?”"); document.getElementById("loginEmail").focus(); return; }
+      auth.sendPasswordResetEmail(email)
+        .then(function () { loginError.style.color = "var(--terracotta-deep)"; loginError.textContent = "check your email for a link to reset your password."; })
+        .catch(showLoginError);
+    });
+
+    // "log in" / "sign up" share one form; this flips between the two modes.
+    let authMode = "login";
+    document.getElementById("loginToggle").addEventListener("click", function () {
+      authMode = (authMode === "login") ? "signup" : "login";
+      const signup = (authMode === "signup");
+      document.getElementById("loginPrimaryBtn").textContent = signup ? "sign up" : "log in";
+      document.getElementById("loginSwitchText").textContent =
+        signup ? "already have an account? " : "don't have an account? ";
+      document.getElementById("loginToggle").textContent = signup ? "log in" : "sign up!";
+      // the "confirm password" field only appears when creating an account
+      document.getElementById("confirmField").classList.toggle("hidden", !signup);
+      document.getElementById("forgotWrap").classList.toggle("hidden", signup);   // "forgot password?" only makes sense when logging in
+      document.getElementById("loginConfirm").value = "";
+      loginError.style.color = "";
+      loginError.textContent = "";
+    });
+
+    function submitEmailPassword() {
+      const email = document.getElementById("loginEmail").value.trim();
+      const pw = document.getElementById("loginPassword").value;
+      loginError.textContent = "";
+      if (!email || !pw) { loginError.textContent = "enter your email and password."; return; }
+      if (authMode === "signup") {
+        const confirm = document.getElementById("loginConfirm").value;
+        if (pw !== confirm) { loginError.textContent = "passwords don't match."; return; }
+        auth.createUserWithEmailAndPassword(email, pw).catch(showLoginError);
+      } else {
+        auth.signInWithEmailAndPassword(email, pw).catch(showLoginError);
+      }
+    }
+    document.getElementById("loginPrimaryBtn").addEventListener("click", submitEmailPassword);
+    document.getElementById("loginPassword").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") submitEmailPassword();
+    });
+    document.getElementById("loginConfirm").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") submitEmailPassword();
+    });
+
+    // Are we running as the wrapped phone APP (Capacitor), or as the website?
+    // In the app, web popups are blocked, so we use Apple/Google's NATIVE sign-in
+    // screens via a plugin, then hand the result to Firebase. On the web we keep
+    // the popup that already works.
+    const isNativeApp = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+
+    async function nativeSignIn(which) {
+      loginError.textContent = "";
+      const FA = window.Capacitor.Plugins.FirebaseAuthentication;
+      try {
+        let cred;
+        if (which === "apple") {
+          const res = await FA.signInWithApple();
+          const c = res.credential || {};
+          cred = new firebase.auth.OAuthProvider("apple.com").credential({ idToken: c.idToken, rawNonce: c.nonce });
+        } else {
+          const res = await FA.signInWithGoogle();
+          const c = res.credential || {};
+          cred = firebase.auth.GoogleAuthProvider.credential(c.idToken, c.accessToken);
+        }
+        await auth.signInWithCredential(cred);   // tell the Firebase JS SDK who signed in
+      } catch (e) {
+        const msg = (e && e.message) ? e.message : String(e);
+        if (/cancel/i.test(msg)) return;          // user backed out — don't nag
+        showLoginError(e);
+      }
+    }
+
+    document.getElementById("loginGoogleBtn").addEventListener("click", function () {
+      loginError.textContent = "";
+      if (isNativeApp) { nativeSignIn("google"); return; }
+      auth.signInWithPopup(googleProvider).catch(showLoginError);
+    });
+
+    // "Sign in with Apple" only appears inside the phone app (needs native APIs).
+    const appleBtn = document.getElementById("loginAppleBtn");
+    if (appleBtn && isNativeApp) {
+      appleBtn.classList.remove("hidden");
+      appleBtn.addEventListener("click", function () { nativeSignIn("apple"); });
+    }
+    // sign out — but push any unsynced changes to the cloud FIRST (best-effort, capped at 2.5s so it
+    // can't hang if you're offline; your data is safe on this device regardless and re-syncs next login).
+    document.getElementById("signOutBtn").addEventListener("click", async function () {
+      const btn = this;
+      const yes = await bbConfirm({
+        title: "sign out?",
+        message: "you can sign back in anytime — your recipes stay saved to your account.",
+        okLabel: "sign out",
+        cancelLabel: "stay signed in"
+      });
+      if (!yes) return;
+      btn.textContent = "signing out…";
+      try {
+        if (window.bakebookFlush) await Promise.race([bakebookFlush(), new Promise(function (r) { setTimeout(r, 2500); })]);
+      } catch (e) {}
+      auth.signOut();
+    });
+
+    // ---- delete account (Apple requires an in-app way to do this) ----
+    document.getElementById("deleteAccountBtn").addEventListener("click", async function () {
+      const yes = await bbConfirm({
+        title: "delete your account?",
+        message: "This permanently erases your bakebook account and ALL of your recipes, log entries, and photos. It can't be undone.",
+        okLabel: "delete everything",
+        cancelLabel: "keep my account",
+        danger: true
+      });
+      if (!yes) return;
+      bbNotice("deleting your account…");
+      try {
+        await firebase.functions().httpsCallable("deleteAccount")();
+        try { localStorage.clear(); } catch (e) {}   // wipe the local cached copy too
+        await auth.signOut().catch(function () {});
+        location.reload();
+      } catch (e) {
+        bbNotice("couldn't delete your account — please try again");
+      }
+    });
+
+    // ---- settings sheet ----
+    // the baker's preferred default unit for new ingredients (grams vs cups); smart per-ingredient
+    // guesses (eggs→each, liquids→ml…) still win — this only sets the fallback for dry/other items.
+    function getDefaultUnit() { return localStorage.getItem("bakebook.defaultUnit") || "g"; }
+    (function () {
+      const sheet = document.getElementById("settingsSheet");
+      // Opens Apple's own Subscriptions page (where the member cancels or switches
+      // between monthly/yearly — Apple owns the actual change). itms-apps:// deep-links
+      // straight into the App Store Subscriptions screen inside the Capacitor webview;
+      // on the plain website (non-native) we fall back to the https page.
+      function openManageSubscription() {
+        try { window.location.href = "itms-apps://apps.apple.com/account/subscriptions"; } catch (e) {}
+        setTimeout(function () {
+          const native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+          if (!native) window.location.href = "https://apps.apple.com/account/subscriptions";
+        }, 400);
+      }
+      function openSettings() {
+        document.getElementById("signOutBtn").textContent = "sign out";   // reset in case a prior sign-out left it on "signing out…"
+        const premium = localStorage.getItem("bakebook.premium") === "1";
+        const meta = document.getElementById("planMeta"), cta = document.getElementById("planCta");
+        if (premium) {
+          meta.textContent = "you’re a member — thank you!"; cta.textContent = "manage subscription"; cta.classList.remove("member"); cta.onclick = openManageSubscription;
+        } else {
+          meta.textContent = "free plan"; cta.textContent = "upgrade"; cta.classList.remove("member");
+          cta.onclick = function () { if (window.bakebookShowPaywall) bakebookShowPaywall(""); };
+        }
+        const u = getDefaultUnit();
+        sheet.querySelectorAll("#unitSeg button").forEach(function (b) { b.classList.toggle("on", b.dataset.u === u); });
+        sheet.classList.remove("hidden");
+        if (window.bbLockScroll) window.bbLockScroll("settings");   // freeze the page behind the sheet
+        requestAnimationFrame(function () { sheet.classList.add("show"); });
+      }
+      function closeSettings() { if (window.bbUnlockScroll) window.bbUnlockScroll("settings"); sheet.classList.remove("show"); setTimeout(function () { sheet.classList.add("hidden"); }, 240); }
+      document.getElementById("settingsBtn").addEventListener("click", openSettings);
+      document.getElementById("settingsFootLink").addEventListener("click", openSettings);
+      document.getElementById("settingsClose").addEventListener("click", closeSettings);
+      document.getElementById("settingsBackdrop").addEventListener("click", closeSettings);
+      document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !sheet.classList.contains("hidden")) closeSettings(); });
+      sheet.querySelectorAll("#unitSeg button").forEach(function (b) {
+        b.addEventListener("click", function () {
+          try { localStorage.setItem("bakebook.defaultUnit", b.dataset.u); } catch (e) {}
+          sheet.querySelectorAll("#unitSeg button").forEach(function (x) { x.classList.toggle("on", x === b); });
+        });
+      });
+    })();
+    // Firebase remembers the login across page loads and tells us who's here.
+    // Signed in -> show the app; signed out -> show the sign-in page.
+    auth.onAuthStateChanged(function (user) {
+      const loginScreen = document.getElementById("loginScreen");
+      const appRoot = document.getElementById("appRoot");
+      if (user) {
+        loginScreen.classList.add("hidden");
+        appRoot.classList.remove("hidden");
+        // start clean whenever a user appears: if Settings was left open (e.g. they signed out from inside it),
+        // close it, and land on the recipes tab rather than wherever the previous session left off.
+        var _ss = document.getElementById("settingsSheet");
+        if (_ss) { _ss.classList.remove("show"); _ss.classList.add("hidden"); if (window.bbUnlockScroll) window.bbUnlockScroll("settings"); }
+        try { showTab(); } catch (e) {}
+        syncPremiumFromServer(user.uid);   // tie purchases to this account + mirror server premium locally
+      } else {
+        appRoot.classList.add("hidden");
+        loginScreen.classList.remove("hidden");
+      }
+      const boot = document.getElementById("bootScreen"); if (boot) boot.remove();   // auth answered → drop the loader
+    });
+
+    // Premium's source of truth is the server (users/{uid}.premium, set by the RevenueCat webhook). The
+    // browser can READ it (rules) but not write it. We mirror it into the local flag so the recipe cap
+    // matches the account everywhere — no more per-device premium. Also ties RevenueCat to this user.
+    function syncPremiumFromServer(uid) {
+      if (window.bakebookBilling) { try { bakebookBilling.setUser(uid); } catch (e) {} }
+      try {
+        firebase.firestore().collection("users").doc(uid).get().then(function (snap) {
+          const prem = !!(snap.exists && snap.data() && snap.data().premium === true);
+          const had = localStorage.getItem("bakebook.premium") === "1";
+          try { localStorage.setItem("bakebook.premium", prem ? "1" : "0"); } catch (e) {}
+          if (prem !== had) { try { renderRecipes(); } catch (e) {} }   // reflect a change without a reload
+        }).catch(function () {});
+      } catch (e) {}
+    }
+    // let the paywall refresh the app the instant a purchase/restore succeeds on-device
+    window.bakebookOnPremiumUnlocked = function () { try { renderRecipes(); } catch (e) {} };
+    // safety net: if auth is unusually slow, still reveal the login so nobody's stuck on a blank/loading screen
+    setTimeout(function () {
+      const boot = document.getElementById("bootScreen");
+      if (boot) { document.getElementById("loginScreen").classList.remove("hidden"); boot.remove(); }
+    }, 8000);
+  </script>
+  <script>
+    // a small on-brand toast for gentle nudges (replaces the OS alert() box)
+    function bbNotice(msg) {
+      let el = document.getElementById("bbNotice");
+      if (!el) { el = document.createElement("div"); el.id = "bbNotice"; el.className = "bb-notice"; document.body.appendChild(el); }
+      el.textContent = msg; el.classList.add("show");
+      clearTimeout(el._t); el._t = setTimeout(function () { el.classList.remove("show"); }, 2600);
+    }
+
+    // branded yes/no modal (returns a Promise<boolean>) — matches recipe.html
+    function bbConfirm(opts) {
+      opts = opts || {};
+      return new Promise(function (resolve) {
+        const modal = document.createElement("div"); modal.className = "bb-modal";
+        const card = document.createElement("div"); card.className = "bb-modal-card";
+        const h = document.createElement("div"); h.className = "bb-modal-title"; h.textContent = opts.title || "are you sure?";
+        const m = document.createElement("div"); m.className = "bb-modal-msg"; m.textContent = opts.message || "";
+        const actions = document.createElement("div"); actions.className = "bb-modal-actions";
+        const cancel = document.createElement("button"); cancel.type = "button"; cancel.className = "bb-btn bb-btn-cancel";
+        cancel.textContent = opts.cancelLabel || "cancel";
+        const ok = document.createElement("button"); ok.type = "button";
+        ok.className = "bb-btn bb-btn-confirm" + (opts.danger ? " danger" : "");
+        ok.textContent = opts.okLabel || "confirm";
+        actions.appendChild(cancel); actions.appendChild(ok);
+        card.appendChild(h); if (opts.message) card.appendChild(m); card.appendChild(actions);
+        modal.appendChild(card); document.body.appendChild(modal);
+        requestAnimationFrame(function () { modal.classList.add("show"); });
+        let done = false;
+        function close(result) {
+          if (done) return; done = true;
+          modal.classList.remove("show");
+          document.removeEventListener("keydown", onKey);
+          setTimeout(function () { modal.remove(); }, 180);
+          resolve(result);
+        }
+        function onKey(e) { if (e.key === "Escape") close(false); }
+        cancel.addEventListener("click", function () { close(false); });
+        ok.addEventListener("click", function () { close(true); });
+        modal.addEventListener("click", function (e) { if (e.target === modal) close(false); });
+        document.addEventListener("keydown", onKey);
+        cancel.focus();
+      });
+    }
+
+    // ---------- data ----------
+    function normalizeRecipe(r) {
+      if (!r.id) r.id = "r" + Date.now() + Math.random().toString(36).slice(2, 7);
+      if (!r.ingredients) r.ingredients = [];
+      if (!r.steps) r.steps = [];
+      if (!r.photos) r.photos = [];
+      if (!r.logs) r.logs = [];
+      if (!r.createdAt) r.createdAt = 0;
+      if (!r.updatedAt) r.updatedAt = r.createdAt || 0;
+    }
+    let recipes = JSON.parse(localStorage.getItem("bakebook.recipes")) || [];
+    recipes.forEach(normalizeRecipe);
+    localStorage.setItem("bakebook.recipes", JSON.stringify(recipes));
+    function saveToBrowser() { localStorage.setItem("bakebook.recipes", JSON.stringify(recipes)); }
+
+    // One-time (idempotent) merge of categories that differ only by capitalization ("cakes" vs "Cakes").
+    // Winning spelling = the one used by the MOST recipes (tie → first encountered, recipes before stored).
+    // Rewrites every recipe + the stored-category list to that one casing, and only saves when something
+    // changed (so it syncs), so a second run finds no duplicates and writes nothing. ONLY changes the CASE
+    // of category strings — it never drops a recipe or moves one to a different category.
+    function canonicalizeAllCategories() {
+      const groups = {};   // lowerKey -> { counts: {casing: recipeCount}, order: [casing, …first-seen] }
+      function note(casing, isRecipe) {
+        const raw = (casing == null ? "" : String(casing)).trim();
+        if (!raw) return;
+        const key = raw.toLowerCase();
+        let g = groups[key];
+        if (!g) g = groups[key] = { counts: {}, order: [] };
+        if (g.counts[raw] === undefined) { g.counts[raw] = 0; g.order.push(raw); }
+        if (isRecipe) g.counts[raw]++;
+      }
+      recipes.forEach(function (r) { if (r && r.category) note(r.category, true); });   // recipes first (tie-break)
+      getStoredCategories().forEach(function (c) { note(c, false); });
+
+      const canonical = {};   // lowerKey -> winning spelling
+      let hasDup = false;
+      Object.keys(groups).forEach(function (key) {
+        const g = groups[key];
+        if (g.order.length > 1) hasDup = true;
+        let best = g.order[0];
+        g.order.forEach(function (casing) { if (g.counts[casing] > g.counts[best]) best = casing; });
+        canonical[key] = best;
+      });
+      if (!hasDup) return;   // no case-duplicates → nothing to merge (idempotent no-op)
+
+      let changed = false;
+      recipes.forEach(function (r) {
+        if (!r || !r.category) return;
+        const canon = canonical[String(r.category).trim().toLowerCase()];
+        if (canon && r.category !== canon) { r.category = canon; changed = true; }
+      });
+
+      // rebuild stored categories: canonical casing, case-insensitively unique (empties pass through untouched)
+      const newStored = []; const seen = {}; let storedChanged = false;
+      getStoredCategories().forEach(function (c) {
+        const raw = (c == null ? "" : String(c)).trim();
+        if (!raw) { newStored.push(c); return; }   // leave empty entries as they were
+        const key = raw.toLowerCase();
+        if (seen[key]) { storedChanged = true; return; }   // drop a case-duplicate of one already kept
+        seen[key] = true;
+        const canon = canonical[key] || raw;
+        if (canon !== c) storedChanged = true;
+        newStored.push(canon);
+      });
+
+      if (changed) saveToBrowser();   // persists + syncs the recipe casing changes
+      if (storedChanged) localStorage.setItem("bakebook.categories", JSON.stringify(newStored));   // syncs the stored list
+    }
+    canonicalizeAllCategories();
+
+    // ---------- free-plan recipe cap ----------
+    // Only MASTER recipes count toward the free limit — variations are free, so the baker
+    // can keep developing the recipes they have. Premium (set later by the paid tier) is unlimited.
+    const FREE_RECIPE_CAP = 15;
+    function masterCount() { return recipes.filter(function (r) { return !r.parentId; }).length; }
+    function isPremium() { return localStorage.getItem("bakebook.premium") === "1"; }
+    // True if the baker may add another recipe; otherwise shows a warm "you've built a real
+    // collection" nudge (a compliment, never a cold "denied") and returns false.
+    function canAddRecipe() {
+      if (isPremium() || masterCount() < FREE_RECIPE_CAP) return true;
+      // when bakebook+ is live, offer the upgrade right here; otherwise just explain the cap
+      if (window.bakebookBilling && bakebookBilling.available() && window.bakebookShowPaywall) {
+        bakebookShowPaywall("recipes");
+      } else {
+        bbNotice("you've built " + FREE_RECIPE_CAP + " recipes — that's a real collection! your free plan is full. " +
+          "variations still don't count, so keep developing the ones you have. (unlimited recipes are coming with bakebook+.)");
+      }
+      return false;
+    }
+
+    // A gentle counter at the bottom of the recipes list. Free users only, and only once they're
+    // getting close (10+) — a warm heads-up, never a nag. Premium is unlimited, so no counter.
+    // Variations don't count (masterCount ignores them), matching the cap logic above.
+    function renderRecipeCounter() {
+      const el = document.getElementById("recipeCounter");
+      if (!el) return;
+      const n = masterCount();
+      if (isPremium() || n < 10) { el.style.display = "none"; return; }
+      if (n >= FREE_RECIPE_CAP) {
+        el.innerHTML = FREE_RECIPE_CAP + " of " + FREE_RECIPE_CAP + " free recipes — " +
+          "<a href='#' id='rcUpgrade'>get unlimited with bakebook+</a>";
+        const up = el.querySelector("#rcUpgrade");
+        if (up) up.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          if (window.bakebookShowPaywall) bakebookShowPaywall("recipes");
+        });
+      } else {
+        el.textContent = n + " of " + FREE_RECIPE_CAP + " free recipes added";
+      }
+      el.style.display = "";
+    }
+
+    // ---------- ingredient library (common ingredients + your most-used, learned live) ----------
+    const UNITS = ["g", "kg", "ml", "l", "cups", "tbsp", "tsp", "oz", "pinch", "each"];
+    const COMMON_INGREDIENTS = [
+      "all purpose flour", "bread flour", "cake flour", "almond flour", "whole wheat flour",
+      "granulated sugar", "brown sugar", "powdered sugar",
+      "unsalted butter", "salted butter", "eggs", "egg whites", "egg yolks",
+      "whole milk", "buttermilk", "heavy cream", "oat milk", "yogurt", "sour cream", "cream cheese",
+      "baking powder", "baking soda", "yeast", "salt", "vanilla extract", "cocoa powder", "chocolate chips",
+      "honey", "maple syrup", "water", "vegetable oil", "cinnamon", "lemon juice"
+    ];
+    function defaultUnitFor(name) {
+      if (name === "eggs" || name === "egg whites" || name === "egg yolks") return "each";
+      if (name.indexOf("vanilla") !== -1 || name === "cinnamon") return "tsp";
+      const liquids = ["milk", "cream", "water", "oil", "juice", "syrup"];
+      for (let i = 0; i < liquids.length; i++) { if (name.indexOf(liquids[i]) !== -1) return "ml"; }
+      return getDefaultUnit();   // dry/other → the baker's default-unit preference (grams or cups)
+    }
+    // A realistic STARTING quantity for each common ingredient, so the library suggests something real
+    // ("1 tsp salt", "250 g flour", "2 eggs") instead of a flat 100 that's almost never right. Returns
+    // BOTH an amount and the unit that reads best for that ingredient; the baker still adjusts either.
+    function defaultQtyFor(name) {
+      const n = (name || "").trim().toLowerCase();
+      const pref = getDefaultUnit();   // the baker's dry-goods preference: "g" or "cups"
+
+      // small, spoon-measured items — a tsp count is far friendlier than "100 g salt"
+      const SPOON = { "salt": 1, "baking powder": 2, "baking soda": 1, "yeast": 2, "vanilla extract": 1, "cinnamon": 1 };
+      if (SPOON[n] != null) return { amount: SPOON[n], unit: "tsp" };
+
+      // countable
+      if (n === "eggs" || n === "egg whites" || n === "egg yolks") return { amount: 2, unit: "each" };
+
+      // liquids — pour in ml, or cups if that's how the baker measures. values: [ml, cups]
+      const LIQUID = { "whole milk": [240, 1], "buttermilk": [240, 1], "heavy cream": [240, 1], "oat milk": [240, 1],
+        "water": [240, 1], "vegetable oil": [120, 0.5], "lemon juice": [30, 0.125], "honey": [80, 0.25], "maple syrup": [80, 0.25] };
+      if (LIQUID[n]) return pref === "cups" ? { amount: LIQUID[n][1], unit: "cups" } : { amount: LIQUID[n][0], unit: "ml" };
+
+      // bulk dry / soft goods — grams by default, or a cups amount when the baker prefers cups. values: [g, cups]
+      const BULK = {
+        "all purpose flour": [250, 2], "bread flour": [250, 2], "cake flour": [240, 2], "whole wheat flour": [240, 2], "almond flour": [100, 1],
+        "granulated sugar": [200, 1], "brown sugar": [200, 1], "powdered sugar": [120, 1],
+        "unsalted butter": [113, 0.5], "salted butter": [113, 0.5],
+        "yogurt": [240, 1], "sour cream": [240, 1], "cream cheese": [225, 1],
+        "cocoa powder": [50, 0.5], "chocolate chips": [170, 1]
+      };
+      if (BULK[n]) return pref === "cups" ? { amount: BULK[n][1], unit: "cups" } : { amount: BULK[n][0], unit: "g" };
+
+      // anything else — keep the smart unit guess, with a sane amount for that unit
+      const u = defaultUnitFor(name);
+      return { amount: (u === "g" || u === "ml") ? 100 : 1, unit: u };
+    }
+    // Your ingredients first (most-used first), then common ones you haven't used yet.
+    function getLibrary() {
+      const counts = {};
+      recipes.forEach(function (r) {
+        (r.ingredients || []).forEach(function (ing) {
+          const n = (ing.name || "").trim().toLowerCase();
+          if (n) counts[n] = (counts[n] || 0) + 1;
+        });
+      });
+      // only common whole ingredients; float the ones you use most to the top (imported/custom names stay out)
+      return COMMON_INGREDIENTS.slice().sort(function (a, b) { return (counts[b] || 0) - (counts[a] || 0); });
+    }
+    // Press-and-hold a step button to keep changing fast (accelerates the longer you hold).
+    function attachHold(btn, action) {
+      let timer = null, ticks = 0;
+      function step() { action(); ticks++; const d = ticks > 12 ? 40 : ticks > 5 ? 90 : 200; timer = setTimeout(step, d); }
+      function start(e) { e.preventDefault(); ticks = 0; action(); timer = setTimeout(step, 350); }
+      function stop() { if (timer) { clearTimeout(timer); timer = null; } }
+      btn.addEventListener("mousedown", start);
+      btn.addEventListener("touchstart", start, { passive: false });
+      ["mouseup", "mouseleave", "touchend", "touchcancel"].forEach(function (ev) { btn.addEventListener(ev, stop); });
+    }
+    // A small on-brand dropdown to replace native <select> (the OS draws those dark & oversized).
+    // options: array of "value" strings, or [value, label] pairs. Returns an element with a .value
+    // property (get/set), so existing code that reads/sets el.value keeps working unchanged.
+    function makeSelect(options, value, onChange, opts) {
+      opts = opts || {};
+      const norm = options.map(function (o) { return Array.isArray(o) ? { v: o[0], l: o[1] } : { v: o, l: o }; });
+      const wrap = document.createElement("div"); wrap.className = "sel" + (opts.className ? " " + opts.className : "");
+      const btn = document.createElement("button"); btn.type = "button"; btn.className = "sel-btn";
+      const lbl = document.createElement("span"); lbl.className = "sel-label";
+      const car = document.createElement("span"); car.className = "sel-caret"; car.textContent = "▾";
+      btn.appendChild(lbl); btn.appendChild(car);
+      const list = document.createElement("div"); list.className = "sel-list hidden";
+      let current = value;
+      function labelFor(v) { for (let i = 0; i < norm.length; i++) if (norm[i].v === v) return norm[i].l; return v; }
+      function draw() {
+        lbl.textContent = labelFor(current);
+        Array.prototype.forEach.call(list.children, function (it, i) { it.classList.toggle("on", norm[i].v === current); });
+      }
+      norm.forEach(function (o) {
+        const it = document.createElement("div"); it.className = "sel-opt"; it.textContent = o.l;
+        it.addEventListener("mousedown", function (e) { e.preventDefault(); });   // keep focus put (safe inside inline editors)
+        it.addEventListener("click", function (e) {
+          e.stopPropagation(); current = o.v; draw(); list.classList.add("hidden");
+          if (onChange) onChange(current);
+        });
+        list.appendChild(it);
+      });
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        const willOpen = list.classList.contains("hidden");
+        document.querySelectorAll(".sel-list").forEach(function (el) { el.classList.add("hidden"); });   // one open at a time
+        if (willOpen) list.classList.remove("hidden");
+      });
+      wrap.appendChild(btn); wrap.appendChild(list); draw();
+      Object.defineProperty(wrap, "value", { get: function () { return current; }, set: function (v) { current = v; draw(); } });
+      return wrap;
+    }
+    // a click anywhere else closes any open custom dropdown
+    document.addEventListener("click", function () {
+      document.querySelectorAll(".sel-list").forEach(function (el) { el.classList.add("hidden"); });
+    });
+
+    function renderLibrary(gridEl, term, onAdd) {
+      const t = (term || "").trim().toLowerCase();
+      const shown = getLibrary().filter(function (n) { return t === "" || n.indexOf(t) !== -1; });
+      gridEl.innerHTML = "";
+      shown.forEach(function (name) {
+        const card = document.createElement("div"); card.className = "lib-card";
+        const nm = document.createElement("div"); nm.className = "lib-name"; nm.textContent = name;
+        const ctr = document.createElement("div"); ctr.className = "lib-controls";
+        // amount: an iOS-style wheel — flick/drag up to increase, down to decrease
+        const wheel = document.createElement("div"); wheel.className = "wheel";
+        const gUp = document.createElement("span"); gUp.className = "wheel-ghost";
+        const vEl = document.createElement("span"); vEl.className = "wheel-val";
+        const gDn = document.createElement("span"); gDn.className = "wheel-ghost";
+        wheel.appendChild(gUp); wheel.appendChild(vEl); wheel.appendChild(gDn);
+        const q0 = defaultQtyFor(name);                     // realistic starting amount + unit for THIS ingredient
+        let val = q0.amount;
+        function drawWheel() { vEl.textContent = val; gUp.textContent = val + 1; gDn.textContent = Math.max(0, val - 1); }
+        function setVal(v) { val = Math.max(0, Math.round(v)); drawWheel(); }
+        drawWheel();
+        let startY = 0, startVal = 0, dragging = false, moved = false, lastTap = 0, wheelIdle = null;
+        // double-tap the wheel to type an exact amount
+        function beginEdit() {
+          const inp = document.createElement("input");
+          inp.type = "text"; inp.inputMode = "decimal"; inp.className = "wheel-edit"; inp.value = val;
+          wheel.classList.add("editing"); wheel.appendChild(inp);
+          inp.focus(); inp.select();
+          function commit() {
+            const v = parseFloat(inp.value);
+            if (!isNaN(v)) val = Math.max(0, v);
+            inp.remove(); wheel.classList.remove("editing"); drawWheel();
+          }
+          inp.addEventListener("blur", commit);
+          inp.addEventListener("keydown", function (e) {
+            if (e.key === "Enter") { e.preventDefault(); inp.blur(); }
+            else if (e.key === "Escape") { inp.value = val; inp.blur(); }
+          });
+        }
+        wheel.addEventListener("pointerdown", function (e) {
+          if (wheel.classList.contains("editing")) return;   // let the input take clicks
+          dragging = true; moved = false; startY = e.clientY; startVal = val;
+          wheel.setPointerCapture(e.pointerId); wheel.classList.add("grabbing");
+        });
+        wheel.addEventListener("pointermove", function (e) {
+          if (!dragging) return;
+          const dy = startY - e.clientY;                   // drag up = increase
+          if (Math.abs(dy) > 3) moved = true;
+          const mag = Math.pow(Math.abs(dy) / 5, 1.3);     // fine near center, fast on a big flick
+          setVal(startVal + Math.sign(dy) * mag);
+        });
+        function endDrag() {
+          if (!dragging) return;
+          dragging = false; wheel.classList.remove("grabbing");
+          if (!moved) {                                    // a tap (not a drag)
+            const now = Date.now();
+            if (now - lastTap < 320) { lastTap = 0; beginEdit(); }   // double-tap → type it
+            else lastTap = now;
+          }
+        }
+        wheel.addEventListener("pointerup", endDrag);
+        wheel.addEventListener("pointercancel", endDrag);
+        wheel.addEventListener("wheel", function (e) {
+          e.preventDefault(); setVal(val + (e.deltaY < 0 ? 1 : -1));
+          wheel.classList.add("grabbing");                       // flash the enlarge + bar while scrolling
+          clearTimeout(wheelIdle); wheelIdle = setTimeout(function () { wheel.classList.remove("grabbing"); }, 260);
+        }, { passive: false });
+
+        const unit = makeSelect(UNITS, q0.unit, null, { className: "lib-unit" });
+        const add = document.createElement("button"); add.className = "lib-add"; add.type = "button"; add.textContent = "+";
+        add.addEventListener("click", function () { onAdd(String(val), unit.value, name); });
+        ctr.appendChild(unit); ctr.appendChild(wheel); ctr.appendChild(add);
+        card.appendChild(nm); card.appendChild(ctr);
+        gridEl.appendChild(card);
+      });
+    }
+
+    // ---------- state ----------
+    let activeCategory = null;   // when set, the recipes list is filtered to this category
+    let draftIngredients = [];
+    let draftSteps = [];
+
+    // ---------- home view ----------
+    // Categories now live inline on the home page (via the "by category" sort), so there is a single
+    // home view; showTab just makes sure the recipes list is showing and redrawn.
+    function showTab() {
+      document.getElementById("recipesView").classList.remove("hidden");
+      document.getElementById("appRoot").classList.add("tab-recipes");   // butter-bar clearance
+      renderRecipes();
+    }
+
+    // ---------- drag a recipe tile onto the trash to delete it ----------
+    // How it works: press-and-HOLD a tile (~380ms) to "pick it up" (a quick tap still just opens the
+    // recipe; a scroll/swipe cancels the pickup). Once lifted, a floating copy follows your finger and a
+    // trash bin appears at the bottom — drag over it and release to delete (with a confirm). Works with
+    // touch AND mouse. We handle scroll-vs-drag ourselves and suppress the link's click after a drag.
+    (function () {
+      const trash = document.getElementById("trashZone");
+      let tile = null, sx = 0, sy = 0, lastX = 0, lastY = 0, ghost = null, active = false, lpTimer = null, justDragged = false, hotGroup = null;
+      let scrollDir = 0, scrollRAF = 0;   // auto-scroll while dragging near a screen edge
+      const HOLD_MS = 380, MOVE_CANCEL = 10, EDGE_BAND = 76, SCROLL_STEP = 9;
+
+      function pt(e) { return (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e; }
+      function canDrag() {
+        return document.getElementById("butterSheet").classList.contains("hidden")
+          && document.getElementById("createForm").classList.contains("hidden");
+      }
+
+      function onDown(e) {
+        if (active || !canDrag()) return;
+        const t = e.target.closest && e.target.closest(".recipe-tile");
+        if (!t) return;
+        tile = t; const p = pt(e); sx = lastX = p.clientX; sy = lastY = p.clientY;
+        lpTimer = setTimeout(activate, HOLD_MS);
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
+        document.addEventListener("touchmove", onMove, { passive: false });
+        document.addEventListener("touchend", onUp);
+        document.addEventListener("touchcancel", onUp);
+      }
+
+      function activate() {
+        if (!tile) return;
+        active = true; window.__bbDraggingTile = true;
+        document.body.classList.add("bb-tile-dragging");   // give the by-category view room to reach the last category during the drag
+        if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
+        const photo = tile.querySelector(".tile-photo");   // recipe thumbnail
+        const r = photo.getBoundingClientRect();
+        ghost = photo.cloneNode(true); ghost.className = "drag-ghost";
+        ghost.style.width = r.width + "px"; ghost.style.height = r.height + "px";
+        moveGhost(lastX, lastY);
+        document.body.appendChild(ghost);
+        tile.classList.add("lifting");
+        trash.classList.add("show");
+      }
+
+      function moveGhost(x, y) {
+        if (!ghost) return;
+        ghost.style.left = (x - ghost.offsetWidth / 2) + "px";
+        ghost.style.top = (y - ghost.offsetHeight / 2) + "px";
+      }
+      function overTrash(x, y) {
+        const r = trash.getBoundingClientRect(), m = 34;   // generous hit margin
+        return x >= r.left - m && x <= r.right + m && y >= r.top - m && y <= r.bottom + m;
+      }
+      // In the "by category" view, find the real category group under the finger (whole group is the target,
+      // header + carousel/grid). "uncategorized" is never a drop target. Returns the .cat-group element or null.
+      function catGroupAt(x, y) {
+        if (typeof sortSelect === "undefined" || sortSelect.value !== "category") return null;
+        const groups = document.querySelectorAll("#recipeList .cat-group");
+        for (let i = 0; i < groups.length; i++) {
+          const g = groups[i], cat = g.dataset.cat;
+          if (!cat || cat === "uncategorized") continue;
+          const r = g.getBoundingClientRect();
+          if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return g;
+        }
+        return null;
+      }
+      function setCatHot(g) {   // highlight the hovered category group (only one at a time)
+        if (g === hotGroup) return;
+        if (hotGroup) hotGroup.classList.remove("drop-hot");
+        hotGroup = g;
+        if (hotGroup) hotGroup.classList.add("drop-hot");
+      }
+
+      // refresh what's under the finger (trash "hot" + category highlight) — called on move AND each
+      // auto-scroll frame, since content slides under a stationary finger while auto-scrolling
+      function updateHover() {
+        if (!active) return;
+        const hot = overTrash(lastX, lastY);
+        trash.classList.toggle("hot", hot);
+        if (ghost) ghost.classList.toggle("doomed", hot);
+        setCatHot(hot ? null : catGroupAt(lastX, lastY));   // trash wins; otherwise light up the category under the finger
+      }
+
+      // continuously scroll the page while the finger sits in the top/bottom edge band (drag only)
+      function autoScrollTick() {
+        scrollRAF = 0;
+        if (!active || !scrollDir) return;
+        window.scrollBy(0, scrollDir * SCROLL_STEP);
+        updateHover();
+        scrollRAF = requestAnimationFrame(autoScrollTick);
+      }
+      function setScrollDir(d) {
+        scrollDir = d;
+        if (d && !scrollRAF) scrollRAF = requestAnimationFrame(autoScrollTick);
+      }
+      function stopAutoScroll() { scrollDir = 0; if (scrollRAF) { cancelAnimationFrame(scrollRAF); scrollRAF = 0; } }
+
+      function onMove(e) {
+        const p = pt(e); lastX = p.clientX; lastY = p.clientY;
+        if (!active) {
+          if (Math.hypot(p.clientX - sx, p.clientY - sy) > MOVE_CANCEL) reset();   // it's a scroll/swipe/tap, not a hold
+          return;
+        }
+        e.preventDefault();   // we own the gesture now — stop the page from scrolling
+        moveGhost(lastX, lastY);
+        updateHover();
+        // near a screen edge? auto-scroll that way so off-screen categories (and space under the trash) are reachable
+        const vh = window.innerHeight || document.documentElement.clientHeight;
+        setScrollDir(lastY < EDGE_BAND ? -1 : lastY > vh - EDGE_BAND ? 1 : 0);
+      }
+
+      function onUp() {
+        clearTimeout(lpTimer);
+        if (active) {
+          const drop = tile, hot = trash.classList.contains("hot"), grp = hotGroup;
+          finish();
+          if (hot) askDelete(drop);
+          else if (grp) moveToCategory(drop, grp.dataset.cat);   // released over a category → move the recipe there
+          justDragged = true; setTimeout(function () { justDragged = false; }, 400);
+        }
+        reset();
+      }
+
+      function finish() {   // tear down the visual bits of an active drag
+        if (ghost) { ghost.remove(); ghost = null; }
+        if (tile) tile.classList.remove("lifting");
+        trash.classList.remove("show", "hot");
+        setCatHot(null);   // clear any category drop-highlight
+        stopAutoScroll();
+        active = false; window.__bbDraggingTile = false;
+        document.body.classList.remove("bb-tile-dragging");   // drag over → drop the extra by-category clearance
+      }
+      function reset() {    // detach listeners + clear state after any gesture
+        clearTimeout(lpTimer);
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        document.removeEventListener("touchmove", onMove, { passive: false });
+        document.removeEventListener("touchend", onUp);
+        document.removeEventListener("touchcancel", onUp);
+        if (active) finish();
+        tile = null;
+      }
+
+      function askDelete(t) {
+        const id = t && t.dataset ? t.dataset.id : null;
+        const rec = recipes.find(function (r) { return r.id === id; });
+        if (!rec) return;
+        const kids = recipes.filter(function (r) { return r.parentId === id; }).length;
+        const extra = kids ? " and its " + kids + " variation" + (kids > 1 ? "s" : "") : "";
+        bbConfirm({
+          title: "delete recipe?",
+          message: "“" + (rec.name || "this recipe") + "”" + extra + " will be removed.",
+          okLabel: "delete", cancelLabel: "keep", danger: true
+        }).then(function (ok) {
+          if (!ok) return;
+          const removed = recipes.filter(function (r) { return r.id === id || r.parentId === id; });   // keep a copy for undo
+          recipes = recipes.filter(function (r) { return r.id !== id && r.parentId !== id; });
+          saveToBrowser();                 // persists + syncs the removal to the cloud
+          if (window.bakebookFlush) bakebookFlush();   // push the delete to the cloud NOW (don't wait for the debounce)
+          renderRecipes();
+          showUndo(kids ? "recipe + variations removed" : "recipe removed", function () { restoreRecipes(removed); });
+        });
+      }
+
+      // move a dragged recipe into the category it was dropped on (data change; persisted + synced like any edit)
+      function moveToCategory(t, targetCat) {
+        const id = t && t.dataset ? t.dataset.id : null;
+        const rec = recipes.find(function (r) { return r.id === id; });
+        if (!rec || !targetCat || targetCat === "uncategorized") return;
+        if ((rec.category || "").trim().toLowerCase() === targetCat.trim().toLowerCase()) return;   // same category → no-op
+        rec.category = targetCat;         // store the target's actual spelling (N1 case-insensitivity)
+        rec.updatedAt = Date.now();
+        saveToBrowser();                  // persists + syncs the change to the cloud
+        if (window.bakebookFlush) bakebookFlush();   // push the move to the cloud now (don't wait for the debounce)
+        renderRecipes();
+        bbNotice("moved to “" + targetCat + "”");
+      }
+
+      // after a real drag, swallow the click the browser fires so the tile doesn't open/navigate
+      document.addEventListener("click", function (e) {
+        if (justDragged && e.target.closest && e.target.closest(".recipe-tile")) { e.preventDefault(); e.stopPropagation(); }
+      }, true);
+
+      // block the browser's native drag (image "copy") on a tile so only our custom drag runs
+      document.addEventListener("dragstart", function (e) {
+        if (e.target.closest && e.target.closest(".recipe-tile")) e.preventDefault();
+      });
+
+      document.addEventListener("mousedown", onDown);
+      document.addEventListener("touchstart", onDown, { passive: true });
+    })();
+
+    // ---------- recipes tab ----------
+    // photoless tiles get a vintage gingham check tinted by the recipe's name + a monogram letter
+    // all in the warm terracotta/clay/ochre/tan family so the tile + category grids feel on-brand
+    // (was a mixed set with cool blues/greens/pinks that clashed with the terracotta palette)
+    const WARM = ["#D98E6E", "#E5A06B", "#E7C46A", "#CE9585", "#C8926F", "#D3A05B", "#BE6F5D", "#DDB98E", "#CF9A7E", "#C98A76"];
+    function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
+    // a brighter, larger woven-plaid fill for photoless thumbnails (color varies by name / category)
+    function plaidBg(c) {
+      return "repeating-linear-gradient(45deg, " + c + "80 0 15px, transparent 15px 32px)," +
+             "repeating-linear-gradient(135deg, " + c + "52 0 15px, transparent 15px 32px)," +
+             "#FCF8EE";
+    }
+    // Cache each hero thumbnail's <img> by URL and REUSE the same already-decoded element across re-renders.
+    // renderRecipes() runs on every search keystroke / category switch / return-to-list; building a fresh
+    // <img src=remoteURL> each time makes the thumbnail blink while it re-fetches + re-decodes from Storage.
+    // Moving the existing decoded element into the new tile shows it instantly — no network, no flash.
+    const heroImgCache = {};   // keyed by recipe id (each recipe owns its thumbnail node)
+    function heroImg(recipe, url) {
+      let img = heroImgCache[recipe.id];
+      if (!img || img.getAttribute("src") !== url) {   // new recipe, or its photo changed → (re)build; else reuse the decoded node
+        img = document.createElement("img"); img.decoding = "async"; img.src = url;
+        heroImgCache[recipe.id] = img;
+      }
+      img.alt = recipe.name || "";
+      return img;
+    }
+    function pruneHeroCache() {   // forget imgs whose recipe no longer exists, so the map can't grow unbounded
+      const live = {};
+      recipes.forEach(function (r) { live[r.id] = 1; });
+      Object.keys(heroImgCache).forEach(function (id) { if (!live[id]) delete heroImgCache[id]; });
+    }
+    // build a home photo-grid tile for a recipe (photo or gingham placeholder, title, small meta)
+    function makeRecipeTile(recipe) {
+      const card = document.createElement("a"); card.className = "recipe-tile";
+      card.href = "recipe.html?id=" + encodeURIComponent(recipe.id);
+      card.dataset.id = recipe.id;   // so drag-to-trash knows which recipe this tile is
+      const title = document.createElement("div"); title.className = "tile-title"; title.textContent = recipe.name || "untitled recipe";
+      const photo = document.createElement("div"); photo.className = "tile-photo";
+      const hero = (recipe.photos && recipe.photos.length) ? recipe.photos[0] : null;
+      if (hero) { photo.appendChild(heroImg(recipe, hero)); }   // reuse the cached, already-decoded <img> — no flash on re-render
+      else {
+        photo.style.background = plaidBg(WARM[hashStr(recipe.name || "") % WARM.length]);
+        const ph = document.createElement("span"); ph.className = "ph"; ph.textContent = ((recipe.name || "").trim()[0] || "").toLowerCase();
+        photo.appendChild(ph);
+      }
+      if (recipe.sample) { const b = document.createElement("span"); b.className = "sample-badge"; b.textContent = "sample"; photo.appendChild(b); }
+      const varCount = recipes.filter(function (x) { return x.parentId === recipe.id; }).length;
+      const bits = [];
+      if (recipe.logs && recipe.logs.length) bits.push(recipe.logs.length + (recipe.logs.length === 1 ? " bake" : " bakes"));
+      if (varCount) bits.push(varCount + (varCount === 1 ? " variation" : " variations"));
+      card.appendChild(photo); card.appendChild(title);
+      if (bits.length) { const meta = document.createElement("div"); meta.className = "tile-meta"; meta.textContent = bits.join("  ·  "); card.appendChild(meta); }
+      return card;
+    }
+    function renderRecipes() {
+      renderRecipeCounter();   // gentle "N of 15 free recipes added" note at the bottom (free users, 10+ only)
+      pruneHeroCache();        // keep the reused-thumbnail cache aligned with the current recipes
+      const term = document.getElementById("recipeSearch").value.trim().toLowerCase();
+      const sort = sortSelect.value;
+
+      if (sort === "category") { renderByCategory(term); return; }   // grouped, inline "by category" view
+
+      let list = recipes.filter(function (r) { return !r.parentId; });   // only master recipes at the top level
+      if (activeCategory !== null) list = list.filter(function (r) { return (r.category || "") === activeCategory; });
+      if (term) list = list.filter(function (r) {
+        const ing = (r.ingredients || []).map(function (i) { return i.name; }).join(" ");   // also match on ingredient names
+        return ((r.name || "") + " " + (r.description || "") + " " + (r.category || "") + " " + ing).toLowerCase().indexOf(term) !== -1;
+      });
+
+      if (sort === "edited") list.sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); });
+      else if (sort === "added") list.sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+      else if (sort === "az") list.sort(function (a, b) { return (a.name || "").localeCompare(b.name || ""); });
+      else if (sort === "bakes") list.sort(function (a, b) { return b.logs.length - a.logs.length; });
+
+      // filter chip (to clear a category filter)
+      const chipWrap = document.getElementById("filterChipWrap");
+      chipWrap.innerHTML = "";
+      if (activeCategory !== null) {
+        const chip = document.createElement("span"); chip.className = "filterchip";
+        chip.textContent = "category: " + (activeCategory || "uncategorized") + "  ✕";
+        chip.addEventListener("click", function () { activeCategory = null; renderRecipes(); });
+        chipWrap.appendChild(chip);
+      }
+
+      const box = document.getElementById("recipeList");
+      box.innerHTML = "";
+      if (list.length === 0) {
+        box.className = "";
+        // brand-new account with nothing yet: offer a warm welcome + optional samples
+        if (recipes.length === 0 && activeCategory === null && !term && !onboardSeen()) {
+          box.appendChild(makeOnboard());
+        } else {
+          box.innerHTML = '<p class="empty">' + (recipes.length === 0 ? "" : "no recipes match.") + '</p>';
+        }
+        return;
+      }
+      box.className = "recipe-grid";
+      list.forEach(function (recipe) { box.appendChild(makeRecipeTile(recipe)); });
+    }
+
+    // ---------- first-run onboarding: fix the "empty app on first open" ----------
+    function onboardSeen() { return localStorage.getItem("bakebook.onboardSeen") === "1"; }
+    function markOnboardSeen() { try { localStorage.setItem("bakebook.onboardSeen", "1"); } catch (e) {} }
+    function makeOnboard() {
+      const wrap = document.createElement("div");
+      wrap.className = "onboard";
+      wrap.innerHTML =
+        '<h2 class="onboard-h">welcome to your baking lab</h2>' +
+        '<p class="onboard-p">bakebook starts empty — it’s your space to store, develop, and perfect your <em>own</em> recipes. ' +
+        'add your first one, or drop in a few samples to explore make-it mode, notes, and butter.</p>' +
+        '<button class="primary" id="obSamples">add sample recipes</button>' +
+        '<button class="linkbtn" id="obFresh">i’ll start fresh</button>';
+      wrap.querySelector("#obSamples").addEventListener("click", addSampleRecipes);
+      wrap.querySelector("#obFresh").addEventListener("click", function () { markOnboardSeen(); renderRecipes(); });
+      return wrap;
+    }
+    function addSampleRecipes() {
+      const now = Date.now();
+      sampleRecipes().forEach(function (r, i) { r.createdAt = now - i; r.updatedAt = now - i; recipes.push(r); });
+      markOnboardSeen();
+      saveToBrowser();   // persists + syncs to the cloud
+      renderRecipes();
+    }
+    // three clearly-labelled sample recipes (also populate the categories tab). Fresh objects each call.
+    function sampleRecipes() {
+      const s = function (name, description, category, ingredients, steps, stepNotes) {
+        return { id: "sample-" + name.toLowerCase().replace(/[^a-z]+/g, "-") + "-" + Math.random().toString(36).slice(2, 6),
+          name: name, description: description, category: category, sample: true,
+          ingredients: ingredients, steps: steps, stepNotes: stepNotes || [], photos: [], logs: [] };
+      };
+      const g = function (amount, unit, iname) { return { amount: amount, unit: unit, name: iname }; };
+      return [
+        s("Chocolate Chip Cookies", "Chewy in the middle, crisp at the edges.", "cookies",
+          [g("2.25", "cups", "all-purpose flour"), g("1", "tsp", "baking soda"), g("1", "tsp", "salt"),
+           g("1", "cup", "unsalted butter"), g("0.75", "cup", "brown sugar"), g("0.75", "cup", "granulated sugar"),
+           g("2", "each", "eggs"), g("2", "tsp", "vanilla extract"), g("2", "cups", "chocolate chips")],
+          ["Whisk the flour, baking soda, and salt together.",
+           "Cream the butter with both sugars until light and fluffy, about 3 minutes.",
+           "Beat in the eggs one at a time, then the vanilla.",
+           "Mix in the dry ingredients until just combined, then fold in the chocolate chips.",
+           "Scoop onto lined trays and bake at 375°F for 10–12 minutes until the edges are golden."],
+          ["", "Brown the butter first for a deeper, nuttier flavor — let it cool slightly before creaming.", "", "Chill the dough 30 minutes for thicker cookies.", ""]),
+        s("Vanilla Birthday Cake", "A soft, tender everyday celebration cake.", "cakes",
+          [g("2.5", "cups", "cake flour"), g("2.5", "tsp", "baking powder"), g("0.5", "tsp", "salt"),
+           g("0.75", "cup", "unsalted butter"), g("1.5", "cups", "granulated sugar"), g("3", "each", "eggs"),
+           g("1", "tbsp", "vanilla extract"), g("1", "cup", "whole milk")],
+          ["Heat the oven to 350°F and line two 8-inch pans.",
+           "Whisk the flour, baking powder, and salt.",
+           "Cream the butter and sugar until pale and fluffy.",
+           "Add the eggs one at a time, then the vanilla.",
+           "Alternate adding the dry mix and the milk, beginning and ending with the dry.",
+           "Divide between the pans and bake 25–30 minutes, until a skewer comes out clean."],
+          ["", "", "", "", "Room-temperature milk and eggs blend in far more evenly.", ""]),
+        s("Banana Bread", "Uses up those over-ripe bananas.", "quick breads",
+          [g("3", "each", "ripe bananas"), g("0.33", "cup", "melted butter"), g("0.75", "cup", "granulated sugar"),
+           g("1", "each", "egg"), g("1", "tsp", "vanilla extract"), g("1", "tsp", "baking soda"),
+           g("1.5", "cups", "all-purpose flour"), g("1", "pinch", "salt")],
+          ["Heat the oven to 350°F and grease a loaf pan.",
+           "Mash the bananas, then stir in the melted butter.",
+           "Mix in the sugar, egg, and vanilla.",
+           "Sprinkle the baking soda and salt over the top, then fold in the flour until just combined.",
+           "Pour into the pan and bake 50–60 minutes, until a skewer comes out clean."],
+          ["", "The riper the bananas, the sweeter and more flavorful the loaf.", "", "", ""])
+      ];
+    }
+    document.getElementById("recipeSearch").addEventListener("input", renderRecipes);
+    // custom sort dropdown (drops from the bar, in bakebook's colors) — replaces the native menu
+    const sortSelect = makeSelect(
+      [["edited", "recently edited"], ["added", "recently added"], ["az", "A–Z"], ["bakes", "most bakes"], ["category", "by category"]],
+      "edited", function () { addingCategory = false; renderRecipes(); }   // switching sort always closes the "+ new category" input
+    );
+    document.getElementById("sortMount").appendChild(sortSelect);
+
+    // ---------- inline "by category" view (chosen from the sort dropdown) ----------
+    // Instead of a separate tab/folder page, picking "by category" regroups the SAME home list into
+    // per-category rows: each category is a swipeable carousel of recipe cards under a tappable header;
+    // tapping the header expands that category in place to a full grid (tap again to collapse).
+    const expandedCats = {};    // category name -> true while expanded to a full grid inline
+    let addingCategory = false; // whether the small "+ new category" input is currently showing
+
+    // sort categories alphabetically, but always park "uncategorized" last
+    function byCatOrder(a, b) {
+      const ka = a === "uncategorized" ? "￿" : a.toLowerCase();
+      const kb = b === "uncategorized" ? "￿" : b.toLowerCase();
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
+    }
+
+    function renderByCategory(term) {
+      document.getElementById("filterChipWrap").innerHTML = "";   // no category chip in this view
+      const box = document.getElementById("recipeList");
+      box.className = "bycat";
+      box.innerHTML = "";
+
+      // small "+ new category" control, just above the category rows (only shown in this view)
+      const head = document.createElement("div"); head.className = "bycat-head";
+      const addBtn = document.createElement("button");
+      addBtn.type = "button"; addBtn.className = "bycat-newcat";
+      addBtn.textContent = "+ new category";
+      head.appendChild(addBtn);
+      if (addingCategory) {
+        const row = document.createElement("div"); row.className = "controls"; row.style.margin = "0.6rem 0 0";
+        const inp = document.createElement("input"); inp.type = "text"; inp.className = "search"; inp.placeholder = "category name"; inp.autocomplete = "off";
+        const save = document.createElement("button"); save.type = "button"; save.className = "primary"; save.textContent = "add"; save.style.flex = "0 0 auto";
+        row.appendChild(inp); row.appendChild(save);
+        head.appendChild(row);
+        const commit = function () {
+          const nn = inp.value.trim();
+          if (!nn) { inp.focus(); return; }
+          addStoredCategory(nn);        // reuse the existing (synced) new-category creation logic
+          addingCategory = false;
+          renderRecipes();
+        };
+        save.addEventListener("click", commit);
+        inp.addEventListener("keydown", function (e) {
+          if (e.key === "Enter") { e.preventDefault(); commit(); }
+          else if (e.key === "Escape") { addingCategory = false; renderRecipes(); }
+        });
+        setTimeout(function () { inp.focus(); }, 0);
+      }
+      addBtn.addEventListener("click", function () { addingCategory = !addingCategory; renderRecipes(); });
+      box.appendChild(head);
+
+      // group master recipes by category; include empty user-created categories so they still appear
+      const map = {};
+      recipes.filter(function (r) { return !r.parentId; }).forEach(function (r) {
+        const cat = r.category || "uncategorized";
+        if (!map[cat]) map[cat] = [];
+        map[cat].push(r);
+      });
+      getStoredCategories().forEach(function (c) { if (!map[c]) map[c] = []; });
+
+      const matches = term ? function (r) {
+        const ing = (r.ingredients || []).map(function (i) { return i.name; }).join(" ");   // also match ingredient names
+        return ((r.name || "") + " " + (r.description || "") + " " + (r.category || "") + " " + ing).toLowerCase().indexOf(term) !== -1;
+      } : null;
+
+      const cats = Object.keys(map).sort(byCatOrder);
+      let anyShown = false;
+      cats.forEach(function (cat) {
+        let catRecipes = map[cat];
+        if (matches) catRecipes = catRecipes.filter(matches);
+        if (term && catRecipes.length === 0) return;   // during an active search, hide groups with no match
+        anyShown = true;
+        box.appendChild(makeCatGroup(cat, catRecipes));
+      });
+
+      if (!anyShown) {
+        const p = document.createElement("p"); p.className = "empty";
+        p.textContent = term ? "no recipes match." : "";
+        box.appendChild(p);
+      }
+    }
+
+    // one category row: a tappable header (with a chevron that hints it expands) plus either a
+    // horizontal carousel of recipe cards (collapsed) or a full grid (expanded). Empty categories
+    // show a gentle placeholder instead.
+    function makeCatGroup(cat, catRecipes) {
+      const group = document.createElement("div"); group.className = "cat-group";
+      group.dataset.cat = cat;   // drop-target category name (used when a dragged recipe is released over this group)
+      const hasRecipes = catRecipes.length > 0;
+      const expanded = hasRecipes && !!expandedCats[cat];
+
+      const headBtn = document.createElement("button");
+      headBtn.type = "button"; headBtn.className = "cat-group-head" + (expanded ? " open" : "");
+      const name = document.createElement("span"); name.className = "cat-group-name"; name.textContent = cat;
+      const count = document.createElement("span"); count.className = "cat-group-count"; count.textContent = hasRecipes ? String(catRecipes.length) : "";
+      headBtn.appendChild(name); headBtn.appendChild(count);
+      if (hasRecipes) {
+        // an obvious "see all"/"collapse" affordance (text + chevron cue) instead of a lone tiny arrow
+        const seeall = document.createElement("span"); seeall.className = "cat-group-seeall";
+        const label = document.createElement("span"); label.className = "cat-group-seeall-label";
+        label.textContent = expanded ? "collapse" : "see all";
+        const chev = document.createElement("span"); chev.className = "cat-group-chev"; chev.textContent = "▾";
+        seeall.appendChild(label); seeall.appendChild(chev);
+        headBtn.appendChild(seeall);
+        headBtn.addEventListener("click", function () {
+          if (expandedCats[cat]) delete expandedCats[cat]; else expandedCats[cat] = true;
+          renderRecipes();
+        });
+      } else {
+        headBtn.classList.add("is-empty");
+      }
+      group.appendChild(headBtn);
+      // press-and-hold the header to rename this category (real categories only, not the synthetic bucket)
+      if (cat !== "uncategorized") wireCatRename(headBtn, cat);
+
+      if (!hasRecipes) {
+        const empty = document.createElement("p"); empty.className = "cat-group-empty"; empty.textContent = "no recipes yet";
+        group.appendChild(empty);
+      } else {
+        const body = document.createElement("div");
+        body.className = expanded ? "recipe-grid" : "cat-carousel";
+        catRecipes.forEach(function (r) { body.appendChild(makeRecipeTile(r)); });
+        group.appendChild(body);
+      }
+      return group;
+    }
+
+    // Press-and-HOLD a category header (~500ms, same feel as drag-to-delete) to rename it. A quick tap
+    // still just expands/collapses. On hold, the header is swapped for an inline text input pre-filled
+    // with the current name (selected); Enter/blur commits, Escape or an empty value cancels. Committing
+    // a name that clashes (case-insensitively) with a DIFFERENT category is blocked with a gentle notice.
+    function wireCatRename(headBtn, cat) {
+      let lpTimer = null, sx = 0, sy = 0, renaming = false;
+      const HOLD_MS = 500, MOVE_CANCEL = 10;
+      function pt(e) { return (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e; }
+      function detach() {
+        clearTimeout(lpTimer);
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        document.removeEventListener("touchmove", onMove, { passive: true });
+        document.removeEventListener("touchend", onUp);
+        document.removeEventListener("touchcancel", onUp);
+      }
+      function onMove(e) { const p = pt(e); if (Math.hypot(p.clientX - sx, p.clientY - sy) > MOVE_CANCEL) detach(); }
+      function onUp() { detach(); }
+      function onDown(e) {
+        if (renaming) return;
+        const p = pt(e); sx = p.clientX; sy = p.clientY;
+        lpTimer = setTimeout(startRename, HOLD_MS);
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
+        document.addEventListener("touchmove", onMove, { passive: true });
+        document.addEventListener("touchend", onUp);
+        document.addEventListener("touchcancel", onUp);
+      }
+      function startRename() {
+        detach();
+        if (renaming) return;
+        renaming = true;
+        if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
+        // swap the whole header for an inline input row (mirrors the "+ new category" input pattern)
+        const row = document.createElement("div"); row.className = "controls"; row.style.margin = "0 0 0.2rem";
+        const input = document.createElement("input");
+        input.type = "text"; input.className = "search"; input.value = cat; input.autocomplete = "off";
+        row.appendChild(input);
+        headBtn.replaceWith(row);
+        setTimeout(function () { input.focus(); input.select(); }, 0);
+        let closed = false;
+        function cancel() { if (closed) return; closed = true; renderRecipes(); }   // restore original header
+        function commit() {
+          if (closed) return;
+          const nn = input.value.trim();
+          if (!nn || nn === cat) { cancel(); return; }   // empty or unchanged => no-op
+          const key = nn.toLowerCase(), oldKey = cat.toLowerCase();
+          if (key === "uncategorized") {   // reserved: "uncategorized" is the synthetic no-category bucket
+            bbNotice("“uncategorized” is a reserved name"); input.focus(); input.select(); return;
+          }
+          if (key !== oldKey) {   // not a pure recasing — make sure no OTHER category already owns this name
+            const clash = getCategories().some(function (c) {
+              const ck = String(c).trim().toLowerCase(); return ck === key && ck !== oldKey;
+            });
+            if (clash) { bbNotice("a category named “" + nn + "” already exists"); input.focus(); input.select(); return; }
+          }
+          closed = true;
+          renameCategory(cat, nn);
+          renderRecipes();
+        }
+        input.addEventListener("keydown", function (e) {
+          if (e.key === "Enter") { e.preventDefault(); commit(); }
+          else if (e.key === "Escape") { e.preventDefault(); cancel(); }
+        });
+        input.addEventListener("blur", function () { setTimeout(commit, 0); });   // tapping away commits
+      }
+      headBtn.addEventListener("mousedown", onDown);
+      headBtn.addEventListener("touchstart", onDown, { passive: true });
+    }
+
+    // ---------- the "new recipe" form ----------
+    const nameInput = document.getElementById("nameInput");
+    const descInput = document.getElementById("descInput");
+    const categoryInput = document.getElementById("categoryInput");
+    const ingAmount = document.getElementById("ingAmount");
+    const ingUnit = makeSelect(UNITS, getDefaultUnit(), null, { className: "unit" });
+    document.getElementById("ingUnitMount").appendChild(ingUnit);
+    const ingName = document.getElementById("ingName");
+    const ingredientList = document.getElementById("ingredientList");
+    const stepInput = document.getElementById("stepInput");
+    const stepList = document.getElementById("stepList");
+
+    function openCreateForm() {
+      const cf = document.getElementById("createForm");
+      restoreDraft();                                    // bring back any half-typed recipe so nothing's lost
+      cf.classList.remove("hidden"); cf.scrollTop = 0;   // full-screen create screen, scrolled to top
+    }
+    function closeCreateForm() { document.getElementById("createForm").classList.add("hidden"); }
+    document.getElementById("newRecipeBtn").addEventListener("click", openCreateForm);
+    document.getElementById("createBack").addEventListener("click", closeCreateForm);
+
+    // ---- draft persistence: never lose a half-typed new recipe ----
+    // The create form's fields lived only in memory, so a refresh / accidental close / navigating away used
+    // to wipe an in-progress recipe. We now mirror the draft to localStorage as the baker types, restore it
+    // when the form opens, and clear it once the recipe is actually saved. This key is NOT cloud-synced (the
+    // store only syncs recipes + categories), so a draft stays on this device until it becomes a real recipe.
+    const DRAFT_KEY = "bakebook.draft";
+    function saveDraft() {
+      try {
+        const d = { name: nameInput.value, description: descInput.value, category: categoryInput.value,
+          ingredients: draftIngredients, steps: draftSteps };
+        const empty = !d.name && !d.description && !d.category && !d.ingredients.length && !d.steps.length;
+        if (empty) { localStorage.removeItem(DRAFT_KEY); return; }   // nothing worth keeping
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+      } catch (e) {}
+    }
+    function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch (e) {} }
+    function restoreDraft() {
+      let d; try { d = JSON.parse(localStorage.getItem(DRAFT_KEY)); } catch (e) { d = null; }
+      if (!d) return;
+      nameInput.value = d.name || ""; descInput.value = d.description || ""; categoryInput.value = d.category || "";
+      draftIngredients = Array.isArray(d.ingredients) ? d.ingredients : [];
+      draftSteps = Array.isArray(d.steps) ? d.steps : [];
+      renderDraftIngredients(); renderDraftSteps();
+    }
+    [nameInput, descInput, categoryInput].forEach(function (el) { el.addEventListener("input", saveDraft); });
+
+    // user-created category names that live in their own synced list (may include empty ones)
+    function getStoredCategories() {
+      try { const c = JSON.parse(localStorage.getItem("bakebook.categories")); return Array.isArray(c) ? c : []; }
+      catch (e) { return []; }
+    }
+    function addStoredCategory(name) {
+      name = (name || "").trim();
+      if (!name) return;
+      name = canonicalCategory(name);   // if one already exists (ignoring case), reuse its spelling instead of a duplicate
+      const cats = getStoredCategories();
+      const key = name.toLowerCase();
+      const exists = cats.some(function (c) { return String(c).trim().toLowerCase() === key; });  // case-insensitive: no "cakes" beside "Cakes"
+      if (!exists) { cats.push(name); localStorage.setItem("bakebook.categories", JSON.stringify(cats)); }  // setItem syncs to cloud
+    }
+    // Rename a category everywhere: retag every recipe currently in it, then swap its entry in the
+    // stored list (both writes sync to the cloud the same way other category edits do). Case-insensitive
+    // by old name, so a pure recasing ("cakes" -> "Cakes") updates the spelling on recipes + the list.
+    function renameCategory(oldName, newName) {
+      oldName = (oldName || "").trim(); newName = (newName || "").trim();
+      if (!oldName || !newName || oldName === newName) return;
+      const oldKey = oldName.toLowerCase();
+      // 1) retag recipes that sit in the old category
+      let touched = false;
+      recipes.forEach(function (r) { if (r.category === oldName) { r.category = newName; touched = true; } });
+      if (touched) { saveToBrowser(); if (window.bakebookFlush) bakebookFlush(); }   // persist + sync recipe edits
+      // 2) swap the stored-category entry (drop any dupes so the list stays case-insensitively unique)
+      const cats = getStoredCategories(); const next = []; let replaced = false;
+      cats.forEach(function (c) {
+        if (String(c).trim().toLowerCase() === oldKey) { if (!replaced) { next.push(newName); replaced = true; } }
+        else { next.push(c); }
+      });
+      localStorage.setItem("bakebook.categories", JSON.stringify(next));   // setItem syncs to cloud
+      // keep the expand/collapse state pinned to the renamed group
+      if (expandedCats[oldName]) { delete expandedCats[oldName]; expandedCats[newName] = true; }
+    }
+    // The unique categories the user has — those used by recipes PLUS ones created directly.
+    function getCategories() {
+      const cats = [];
+      recipes.forEach(function (r) { if (r.category && cats.indexOf(r.category) === -1) cats.push(r.category); });
+      getStoredCategories().forEach(function (c) { if (cats.indexOf(c) === -1) cats.push(c); });
+      cats.sort();
+      return cats;
+    }
+    // Categories are case-insensitive: if one already exists that matches ignoring case, reuse ITS
+    // spelling (so butter's "cakes" joins your "Cakes"). No match → keep exactly as typed.
+    function canonicalCategory(name) {
+      const raw = (name == null ? "" : String(name)).trim();
+      if (!raw) return "";
+      const key = raw.toLowerCase();
+      const existing = getCategories();
+      for (let i = 0; i < existing.length; i++) {
+        if (String(existing[i]).trim().toLowerCase() === key) return existing[i];   // existing casing wins
+      }
+      return raw;
+    }
+    // Show a clickable dropdown of matching categories (all of them when the box is empty).
+    function showCategoryDropdown() {
+      const dd = document.getElementById("categoryDropdown");
+      const term = categoryInput.value.trim().toLowerCase();
+      const matches = getCategories().filter(function (c) { return c.toLowerCase().indexOf(term) !== -1; });
+      dd.innerHTML = "";
+      if (matches.length === 0) { dd.classList.add("hidden"); return; }
+      matches.forEach(function (c) {
+        const opt = document.createElement("div"); opt.className = "cat-option"; opt.textContent = c;
+        // mousedown (not click) so it runs before the input's blur hides the dropdown
+        opt.addEventListener("mousedown", function (e) {
+          e.preventDefault(); categoryInput.value = c; dd.classList.add("hidden");
+        });
+        dd.appendChild(opt);
+      });
+      dd.classList.remove("hidden");
+    }
+    categoryInput.addEventListener("focus", showCategoryDropdown);
+    categoryInput.addEventListener("input", showCategoryDropdown);
+    categoryInput.addEventListener("blur", function () {
+      setTimeout(function () { document.getElementById("categoryDropdown").classList.add("hidden"); }, 150);
+    });
+
+    // a quick "undo" toast that pops after a removal and fades away if you don't tap it
+    let undoTimer = null;
+    function showUndo(message, undoFn) {
+      let toast = document.getElementById("undoToast");
+      if (!toast) {
+        toast = document.createElement("div"); toast.id = "undoToast"; toast.className = "undo-toast";
+        const m = document.createElement("span"); m.className = "undo-msg";
+        const b = document.createElement("button"); b.type = "button"; b.textContent = "undo";
+        toast.appendChild(m); toast.appendChild(b); document.body.appendChild(toast);
+      }
+      toast.querySelector(".undo-msg").textContent = message;
+      const oldBtn = toast.querySelector("button");
+      const btn = oldBtn.cloneNode(true); oldBtn.parentNode.replaceChild(btn, oldBtn);
+      btn.addEventListener("click", function () { clearTimeout(undoTimer); toast.classList.remove("show"); undoFn(); });
+      clearTimeout(undoTimer);
+      toast.classList.add("show");
+      undoTimer = setTimeout(function () { toast.classList.remove("show"); }, 5000);
+    }
+
+    // put deleted recipes back (used by the undo toast after a recipe is deleted — from drag-to-trash
+    // here, or from the recipe page, which stashes the removed recipes for us to restore on arrival).
+    function restoreRecipes(removed) {
+      if (!removed || !removed.length) return;
+      const ids = removed.map(function (r) { return r && r.id; });
+      if (window.bakebookForgetDeletes) bakebookForgetDeletes(ids);   // clear the tombstone BEFORE re-saving
+      removed.forEach(function (r) {
+        if (r && r.id && !recipes.some(function (x) { return x.id === r.id; })) recipes.push(r);
+      });
+      saveToBrowser();                                // re-saves + re-flags pending → pushes it back to the cloud
+      if (window.bakebookFlush) bakebookFlush();
+      renderRecipes();
+    }
+
+    function renderDraftIngredients() {
+      ingredientList.innerHTML = "";
+      draftIngredients.forEach(function (ing, index) {
+        const row = document.createElement("div"); row.className = "builder-row";
+        const label = document.createElement("span");
+        label.textContent = ing.amount + " " + ing.unit + "  ·  " + ing.name;
+        label.title = "double-click to edit"; label.style.cursor = "text";
+        label.addEventListener("dblclick", function () { editDraftIngredient(row, label, index); });
+        const del = document.createElement("button"); del.className = "remove"; del.textContent = "⊖";
+        del.addEventListener("click", function () { const r = draftIngredients[index], at = index; draftIngredients.splice(index, 1); renderDraftIngredients(); showUndo("ingredient removed", function () { draftIngredients.splice(at, 0, r); renderDraftIngredients(); }); });
+        row.appendChild(label); row.appendChild(del);
+        ingredientList.appendChild(row);
+      });
+      saveDraft();   // persist the in-progress recipe every time the ingredient list changes
+    }
+    // double-click a draft ingredient to edit its amount / unit / name inline
+    function editDraftIngredient(row, label, index) {
+      const ing = draftIngredients[index];
+      const wrap = document.createElement("div"); wrap.className = "inline"; wrap.style.flex = "1";
+      const a = document.createElement("input"); a.className = "amount"; a.value = ing.amount; a.inputMode = "decimal";
+      const u = makeSelect(UNITS, ing.unit, null, { className: "unit" });
+      const n = document.createElement("input"); n.className = "iname"; n.value = ing.name;
+      wrap.appendChild(a); wrap.appendChild(u); wrap.appendChild(n);
+      row.replaceChild(wrap, label);
+      a.focus(); a.select();
+      let done = false;
+      function commit() {
+        if (done) return; done = true;
+        draftIngredients[index] = { amount: a.value.trim() || ing.amount, unit: u.value, name: n.value.trim() || ing.name };
+        renderDraftIngredients();
+      }
+      wrap.addEventListener("focusout", function (e) { if (!wrap.contains(e.relatedTarget)) commit(); });
+      a.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); n.focus(); } });
+      n.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); commit(); } });
+    }
+    function renderDraftSteps() {
+      stepList.innerHTML = "";
+      draftSteps.forEach(function (step, index) {
+        const li = document.createElement("li"); li.className = "builder-row";
+        const label = document.createElement("span"); label.textContent = step;
+        label.title = "double-click to edit"; label.style.cursor = "text";
+        label.addEventListener("dblclick", function () { editDraftStep(li, label, index); });
+        const del = document.createElement("button"); del.className = "remove"; del.textContent = "⊖";
+        del.addEventListener("click", function () { const r = draftSteps[index], at = index; draftSteps.splice(index, 1); renderDraftSteps(); showUndo("step removed", function () { draftSteps.splice(at, 0, r); renderDraftSteps(); }); });
+        li.appendChild(label); li.appendChild(del);
+        stepList.appendChild(li);
+      });
+      saveDraft();   // persist the in-progress recipe every time the step list changes
+    }
+    // double-click a draft step to edit its text inline. Uses an auto-growing textarea so a long
+    // step wraps and shows in full (no sideways scrolling in a cramped one-line box).
+    function editDraftStep(li, label, index) {
+      const inp = document.createElement("textarea"); inp.value = draftSteps[index];
+      inp.rows = 1; inp.style.cssText = "resize:none; overflow:hidden;";
+      li.replaceChild(inp, label);
+      function fit() { inp.style.height = "auto"; inp.style.height = inp.scrollHeight + "px"; }
+      inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length);
+      fit();
+      inp.addEventListener("input", fit);
+      let done = false;
+      function commit() { if (done) return; done = true; const v = inp.value.trim(); if (v) draftSteps[index] = v; renderDraftSteps(); }
+      inp.addEventListener("blur", commit);
+      inp.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); inp.blur(); }   // Enter saves; Shift+Enter = newline
+        else if (e.key === "Escape") { done = true; renderDraftSteps(); }
+      });
+    }
+    function addIngredientFromInputs() {
+      const amount = ingAmount.value.trim();
+      const name = ingName.value.trim();
+      if (amount === "") { bbNotice("add an amount first"); return false; }
+      if (name === "") { bbNotice("type an ingredient name"); return false; }
+      draftIngredients.push({ amount: amount, unit: ingUnit.value, name: name });
+      ingAmount.value = ""; ingName.value = "";
+      renderDraftIngredients();
+      return true;
+    }
+    document.getElementById("addIngredient").addEventListener("click", addIngredientFromInputs);
+    ingName.addEventListener("keydown", function (e) { if (e.key === "Enter") addIngredientFromInputs(); });
+
+    function addStepFromInput() {
+      const step = stepInput.value.trim();
+      if (step === "") { return false; }
+      draftSteps.push(step);
+      stepInput.value = "";
+      stepInput.style.height = "auto";   // reset the grown textarea back to one line
+      renderDraftSteps();
+      return true;
+    }
+    // grow the "add a step" textarea as you type so long steps are readable while writing them
+    stepInput.addEventListener("input", function () { stepInput.style.height = "auto"; stepInput.style.height = stepInput.scrollHeight + "px"; });
+    document.getElementById("addStep").addEventListener("click", addStepFromInput);
+
+    // ---- import a recipe from a photo (Claude vision, same key butter uses) ----
+    const IMPORT_PROMPT = "You are reading one or more photos of a SINGLE recipe — they may be different pages or screenshots of the same recipe, so combine everything into one. Extract it and reply with ONLY a JSON object — no prose, no markdown fences. Shape: {\"name\": string, \"description\": string, \"components\": [{\"name\": string, \"ingredients\": [{\"amount\": string, \"unit\": string, \"name\": string}], \"steps\": [string]}]}. If the recipe has distinct parts (e.g. a cake and a frosting, dough and filling, or multiple named sub-recipes), return one component per part with its name (like \"cake\", \"frosting\"). If it's a single recipe, return one component with an empty name. Prefer these units: g, kg, ml, l, cups, tbsp, tsp, oz, pinch, each. If an amount has no unit (like eggs), use \"each\" with the count in amount. Keep steps concise. If you cannot read a recipe, reply {}.";
+    const importStatus = document.getElementById("importStatus");
+    // import uses the same secure backend as butter — no user API key needed
+    const askClaude = firebase.functions().httpsCallable("claude");
+
+    // the home butter popup is an iframe; relay its butter calls through this signed-in page so it
+    // doesn't depend on the iframe's own Firebase session (which can fail to restore → "please sign in").
+    window.addEventListener("message", function (e) {
+      const m = e.data;
+      if (!m) return;
+      // the butter popup can ask us to open the bakebook+ paywall (it lives on this page, not the iframe)
+      if (m.type === "bakebookOpenPaywall") { if (window.bakebookShowPaywall) bakebookShowPaywall(m.reason || ""); return; }
+      // the home butter chat can ask us to SAVE A NEW recipe (butter's create_recipe, confirmed by the baker)
+      if (m.type === "bakebookButterCreate") {
+        try {
+          if (!canAddRecipe()) {   // respects the free-plan recipe cap (opens the paywall if it's hit)
+            if (e.source) e.source.postMessage({ type: "bakebookButterCreated", ok: false, reason: "you've reached your free recipe limit." }, "*");
+            return;
+          }
+          const r = m.recipe || {};
+          const now = Date.now();
+          const comps = normalizeComponents(r);   // handles r.components OR flat r.ingredients/steps (same as import)
+          const rec = {
+            id: "r" + now + Math.random().toString(36).slice(2, 7),
+            name: (r.name || "untitled recipe"), description: (r.description || ""), category: canonicalCategory(r.category || ""),
+            ingredients: [], steps: [], stepNotes: [], photos: [], logs: [], createdAt: now, updatedAt: now
+          };
+          if (comps.length > 1) {                  // a real multi-part recipe → keep the component tabs (cake / frosting …)
+            rec.components = comps;
+            comps.forEach(function (c) { rec.ingredients = rec.ingredients.concat(c.ingredients); rec.steps = rec.steps.concat(c.steps); });
+          } else {                                 // single part → a flat recipe
+            const one = comps[0] || { ingredients: [], steps: [] };
+            rec.ingredients = one.ingredients; rec.steps = one.steps;
+          }
+          recipes.push(rec);
+          try { saveToBrowser(); } catch (err) {}                    // persists + syncs
+          const go = function () { location.href = "recipe.html?id=" + encodeURIComponent(rec.id); };
+          if (window.bakebookFlush) bakebookFlush().then(go, go); else go();   // make sure it reaches the cloud before the recipe page loads
+        } catch (err) {
+          try { if (e.source) e.source.postMessage({ type: "bakebookButterCreated", ok: false, reason: "couldn't save the recipe." }, "*"); } catch (x) {}
+        }
+        return;
+      }
+      if (m.type !== "bakebookButterCall") return;
+      const reply = function (ok, data, error, code) {
+        try { if (e.source) e.source.postMessage({ type: "bakebookButterResult", cid: m.cid, ok: ok, data: data, error: error, code: code }, "*"); } catch (x) {}
+      };
+      try {
+        askClaude(m.payload)
+          .then(function (res) { reply(true, res.data || {}); })
+          .catch(function (err) { reply(false, null, (err && err.message) || "couldn't reach butter.", err && err.code); });
+      } catch (err) { reply(false, null, (err && err.message) || "couldn't reach butter."); }
+    });
+
+    function fileToBase64Resized(file, maxSize, quality) {
+      return new Promise(function (resolve, reject) {
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = function (e) {
+          const img = new Image();
+          img.onerror = reject;
+          img.onload = function () {
+            let w = img.width, h = img.height;
+            if (w > h && w > maxSize) { h = Math.round(h * maxSize / w); w = maxSize; }
+            else if (h >= w && h > maxSize) { w = Math.round(w * maxSize / h); h = maxSize; }
+            const canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
+            canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL("image/jpeg", quality).split(",")[1]);
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    function parseRecipeJSON(text) {
+      try {
+        const s = text.indexOf("{"), e = text.lastIndexOf("}");
+        if (s === -1 || e === -1) return null;
+        const obj = JSON.parse(text.slice(s, e + 1));
+        if (!obj) return null;
+        const hasIng = obj.ingredients && obj.ingredients.length;
+        const hasComp = obj.components && obj.components.length;
+        if (!obj.name && !hasIng && !hasComp) return null;
+        return obj;
+      } catch (err) { return null; }
+    }
+    // turn an imported recipe into clean component objects (falls back to a single unnamed component)
+    function normalizeComponents(r) {
+      let comps = (Array.isArray(r.components) && r.components.length)
+        ? r.components
+        : [{ name: "", ingredients: r.ingredients || [], steps: r.steps || [] }];
+      comps = comps.map(function (c) {
+        return {
+          name: (c.name || "").trim(),
+          ingredients: (Array.isArray(c.ingredients) ? c.ingredients : []).map(function (i) {
+            return { amount: String(i.amount == null ? "" : i.amount), unit: (i.unit || "g"), name: (i.name || "") };
+          }).filter(function (i) { return i.name; }),
+          steps: (Array.isArray(c.steps) ? c.steps : []).filter(function (s) { return s && String(s).trim(); }).map(String),
+          stepNotes: []
+        };
+      }).filter(function (c) { return c.ingredients.length || c.steps.length; });
+      return comps;
+    }
+    // On import, if the recipe's NAME contains a category the baker already uses ("…cake", "…cookies"),
+    // pre-fill that category. If several appear (e.g. "brownie cookie"), the LAST one in the name wins.
+    // Matches whole words with light plural tolerance, so "cupcake" won't accidentally grab "cake".
+    function guessCategoryFromName(name) {
+      const cats = getCategories();
+      if (!cats.length || !name) return "";
+      const hay = " " + name.toLowerCase().replace(/[^a-z0-9\s]+/g, " ").replace(/\s+/g, " ").trim() + " ";
+      let best = "", bestPos = -1;
+      cats.forEach(function (c) {
+        const base = c.toLowerCase().trim();
+        if (!base) return;
+        const singular = base.replace(/s$/, "");
+        [base, singular, singular + "s"].forEach(function (nd) {   // as-is, singular, or +s — whole word, so bounded by spaces
+          const pos = hay.lastIndexOf(" " + nd + " ");
+          if (pos > bestPos) { bestPos = pos; best = c; }
+        });
+      });
+      return best;
+    }
+
+    function applyImported(r) {
+      const comps = normalizeComponents(r);
+
+      // multiple parts (cake / frosting …) → create the recipe WITH component tabs and open its page
+      if (comps.length > 1) {
+        const now = Date.now();
+        const rec = {
+          id: "r" + now + Math.random().toString(36).slice(2, 7),
+          name: (r.name || "imported recipe"),
+          description: (r.description || ""),
+          category: canonicalCategory(categoryInput.value.trim() || guessCategoryFromName(r.name || "")),
+          components: comps,
+          ingredients: [], steps: [], stepNotes: [],
+          photos: [], logs: [],
+          createdAt: now, updatedAt: now
+        };
+        comps.forEach(function (c) { rec.ingredients = rec.ingredients.concat(c.ingredients); rec.steps = rec.steps.concat(c.steps); });
+        recipes.push(rec);
+        try { saveToBrowser(); } catch (e) { bbNotice("couldn't save — storage is full. try removing a photo to free up space."); return; }
+        // make sure the new recipe reaches the cloud BEFORE the recipe page loads
+        const go = function () { location.href = "recipe.html?id=" + encodeURIComponent(rec.id); };
+        if (window.bakebookFlush) { bakebookFlush().then(go, go); } else { go(); }
+        return;
+      }
+
+      // single recipe → fill the form for review
+      if (r.name) nameInput.value = r.name;
+      if (r.description) descInput.value = r.description;
+      if (!categoryInput.value.trim()) { const g = guessCategoryFromName(r.name || ""); if (g) categoryInput.value = g; }   // auto-pick a category from the name
+      const one = comps[0] || { ingredients: [], steps: [] };
+      draftIngredients = one.ingredients.slice();
+      draftSteps = one.steps.slice();
+      renderDraftIngredients(); renderDraftSteps();
+    }
+    // Accepts several photos of ONE recipe (e.g. 3 screenshots) and sends them together,
+    // so butter reads them all and combines them into a single recipe.
+    async function importFromPhotos(files) {
+      if (!canAddRecipe()) return;
+      const many = files.length > 1;
+      importStatus.textContent = many ? ("reading your " + files.length + " photos…") : "reading your photo…";
+      let images;
+      try { images = await Promise.all(files.map(function (f) { return fileToBase64Resized(f, 1400, 0.8); })); }
+      catch (e) { importStatus.textContent = "couldn't read one of those image files."; return; }
+      // one message: every image block first, then the prompt telling butter they're one recipe
+      const content = images.map(function (b64) {
+        return { type: "image", source: { type: "base64", media_type: "image/jpeg", data: b64 } };
+      });
+      content.push({ type: "text", text: IMPORT_PROMPT });
+      try {
+        const result = await askClaude({
+          body: {
+            model: localStorage.getItem("bakebook.model") || "claude-haiku-4-5",
+            max_tokens: 1500,
+            messages: [{ role: "user", content: content }]
+          }
+        });
+        const data = result.data || {};
+        const text = (data.content && data.content[0] && data.content[0].text) || "";
+        const parsed = parseRecipeJSON(text);
+        if (!parsed) { importStatus.textContent = "couldn't find a recipe in " + (many ? "those photos" : "that photo") + " — try clearer, straight-on shots."; return; }
+        applyImported(parsed);
+        importStatus.textContent = "imported — check it over below, then save.";
+      } catch (e) {
+        importStatus.textContent = (e && e.message) ? ("hmm: " + e.message) : "couldn't reach butter — try again in a moment.";
+      }
+    }
+    document.getElementById("importPhotoBtn").addEventListener("click", function () { document.getElementById("importPhotoInput").click(); });
+    document.getElementById("importPhotoInput").addEventListener("change", function () {
+      const files = Array.prototype.slice.call(this.files);   // copy now — clearing value below empties this.files
+      this.value = "";
+      if (files.length) importFromPhotos(files);
+    });
+
+    // ---- import a recipe from a link (Claude fetches the page server-side; no CORS issue) ----
+    const IMPORT_PROMPT_URL = "Fetch the recipe at the URL above and extract it. Reply with ONLY a JSON object — no prose, no markdown fences. Shape: {\"name\": string, \"description\": string, \"components\": [{\"name\": string, \"ingredients\": [{\"amount\": string, \"unit\": string, \"name\": string}], \"steps\": [string]}]}. If the recipe has distinct parts (e.g. a cake and a frosting, dough and filling, or multiple named sub-recipes), return one component per part with its name (like \"cake\", \"frosting\"). If it's a single recipe, return one component with an empty name. Prefer these units: g, kg, ml, l, cups, tbsp, tsp, oz, pinch, each. If an amount has no unit (like eggs), use \"each\" with the count in amount. Keep steps concise. If you can't fetch the page or find a recipe, reply {}.";
+
+    async function importFromURL(url) {
+      if (!canAddRecipe()) return;
+      importStatus.textContent = "reading the page…";
+      const messages = [{ role: "user", content: "Recipe URL: " + url + "\n\n" + IMPORT_PROMPT_URL }];
+      try {
+        for (let i = 0; i < 4; i++) {   // loop only if the server-tool turn pauses
+          const result = await askClaude({
+            body: {
+              model: localStorage.getItem("bakebook.model") || "claude-haiku-4-5",
+              max_tokens: 2000,
+              tools: [{ type: "web_fetch_20250910", name: "web_fetch", max_uses: 5 }],
+              messages: messages
+            }
+          });
+          const data = result.data || {};
+          if (data.stop_reason === "pause_turn") { messages.push({ role: "assistant", content: data.content }); continue; }
+          const text = (data.content || []).filter(function (b) { return b.type === "text"; }).map(function (b) { return b.text; }).join("\n");
+          const parsed = parseRecipeJSON(text);
+          if (!parsed) { importStatus.textContent = "couldn't pull a recipe from that link — some sites block it. try the photo import."; return; }
+          applyImported(parsed);
+          importStatus.textContent = "imported from the link — check it over below, then save.";
+          return;
+        }
+        importStatus.textContent = "that took too long — try again, or use the photo import.";
+      } catch (e) {
+        importStatus.textContent = (e && e.message) ? ("hmm: " + e.message) : "couldn't reach butter — try again in a moment.";
+      }
+    }
+    // "import from a link": the first tap reveals the input (tucked away until then, so there's no
+    // stray empty box); paste + press enter (or tap the pill again) starts the import.
+    (function () {
+      const urlBtn = document.getElementById("importUrlBtn");
+      const urlInput = document.getElementById("importUrlInput");
+      function go() {
+        const url = urlInput.value.trim();
+        if (!url) { urlInput.classList.remove("hidden"); urlInput.focus(); importStatus.textContent = "paste a link first, then press enter."; return; }
+        importFromURL(url);
+      }
+      urlBtn.addEventListener("click", function () {
+        if (urlInput.classList.contains("hidden")) {          // first tap → open the field, ready to paste
+          urlInput.classList.remove("hidden"); urlInput.value = ""; urlInput.focus();
+          importStatus.textContent = "paste your link, then press enter";
+          return;
+        }
+        go();                                                 // already open → treat the tap as "import"
+      });
+      urlInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); go(); } });
+    })();
+    stepInput.addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addStepFromInput(); } });   // Enter adds the step; Shift+Enter = newline
+
+    // ---- library wiring (adds into the new-recipe draft) ----
+    function addFromLibrary(amount, unit, name) {
+      if (amount === "") { bbNotice("set an amount first"); return; }
+      draftIngredients.push({ amount: amount, unit: unit, name: name });
+      renderDraftIngredients();
+    }
+    document.getElementById("librarySearch").addEventListener("input", function () {
+      renderLibrary(document.getElementById("libraryGrid"), this.value, addFromLibrary);
+    });
+    renderLibrary(document.getElementById("libraryGrid"), "", addFromLibrary);
+
+    document.getElementById("saveButton").addEventListener("click", function () {
+      if (!canAddRecipe()) return;
+      const name = nameInput.value.trim();
+      if (name === "") { bbNotice("please give your recipe a name first"); return; }
+      if (ingName.value.trim() !== "") { if (!addIngredientFromInputs()) return; }
+      if (stepInput.value.trim() !== "") { addStepFromInput(); }
+
+      const now = Date.now();
+      recipes.push({
+        id: "r" + now + Math.random().toString(36).slice(2, 7),
+        name: name,
+        description: descInput.value.trim(),
+        category: canonicalCategory(categoryInput.value.trim()),
+        ingredients: draftIngredients,
+        steps: draftSteps,
+        photos: [],
+        logs: [],
+        createdAt: now,
+        updatedAt: now
+      });
+      saveToBrowser();
+
+      nameInput.value = ""; descInput.value = ""; categoryInput.value = "";
+      draftIngredients = []; draftSteps = [];
+      clearDraft();   // the draft became a real recipe — forget it so the next "new recipe" starts blank
+      renderDraftIngredients(); renderDraftSteps();
+      document.getElementById("createForm").classList.add("hidden");
+      renderRecipes();
+      renderLibrary(document.getElementById("libraryGrid"), document.getElementById("librarySearch").value, addFromLibrary);
+    });
+
+    // ---------- first draw ----------
+    showTab();
+
+    // if we just arrived from deleting a recipe on its own page, offer an undo here for a few seconds
+    // (the recipe page navigates away, so its undo has to live on the home screen).
+    (function () {
+      let stash; try { stash = sessionStorage.getItem("bakebook.undoDelete"); } catch (e) { stash = null; }
+      if (!stash) return;
+      try { sessionStorage.removeItem("bakebook.undoDelete"); } catch (e) {}
+      let removed; try { removed = JSON.parse(stash); } catch (e) { removed = null; }
+      if (!removed || !removed.length) return;
+      showUndo(removed.length > 1 ? "recipe + variations removed" : "recipe removed", function () { restoreRecipes(removed); });
+    })();
+
+    // when the cloud copy arrives (first sync) OR a change lands from another device, refresh
+    function refreshFromStore() {
+      recipes = JSON.parse(localStorage.getItem("bakebook.recipes")) || [];
+      recipes.forEach(normalizeRecipe);
+      canonicalizeAllCategories();   // merge any case-duplicate categories synced in from another device (no-op if none)
+      renderRecipes();   // redraw the home list in place (keeps the current sort, incl. "by category")
+    }
+    if (window.bakebookWhenReady) bakebookWhenReady(refreshFromStore);
+    if (window.bakebookOnChange) bakebookOnChange(refreshFromStore);   // live updates from other devices
+  </script>
+
+  <script>
+    // ---------- butter popup (bottom sheet) ----------
+    (function () {
+      const sheet = document.getElementById("butterSheet");
+      const frame = document.getElementById("butterFrame");
+      const bar = document.getElementById("butterBar");
+
+      const panel = sheet.querySelector(".butter-sheet-panel");
+      const head = sheet.querySelector(".butter-sheet-head");
+
+      function openButter() {
+        // load butter in embed mode (its own header hidden) only when first opened
+        if (!frame.getAttribute("src")) frame.setAttribute("src", "butter.html?embed=1");
+        sheet.classList.remove("hidden");
+        if (window.bbLockScroll) window.bbLockScroll("butter");   // freeze the page behind the sheet
+      }
+      function closeButter() { if (window.bbUnlockScroll) window.bbUnlockScroll("butter"); sheet.classList.add("hidden"); panel.style.transition = ""; panel.style.transform = ""; }
+
+      // ---- butter bubble: drag to move, fling past an edge to tuck it off-screen, tap to bring it back ----
+      const KEY = "bakebook.butter.pos", MARGIN = 12;
+      let pos; try { pos = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (_) { pos = {}; }
+      if (pos.side !== "right" && pos.side !== "left") pos.side = "left";
+      let bsize = 52, bdown = false, bmoved = false, bsx = 0, bsy = 0, bbaseL = 0, bbaseT = 0, bpid = null;
+      const vw = () => window.innerWidth, vh = () => window.innerHeight;
+      const clampTop = (t) => Math.max(64, Math.min(vh() - bsize - 24, t));
+      function savePos() { try { localStorage.setItem(KEY, JSON.stringify(pos)); } catch (_) {} }
+      function applyPos() {
+        bsize = bar.offsetWidth || 52;
+        bar.style.bottom = "auto";
+        if (pos.top == null) pos.top = vh() - bsize - 96;
+        pos.top = clampTop(pos.top);
+        bar.style.left = (pos.side === "right" ? vw() - bsize - MARGIN : MARGIN) + "px";
+        bar.style.top = pos.top + "px";
+        bar.classList.toggle("tuck-right", !!pos.tucked && pos.side === "right");
+        bar.classList.toggle("tuck-left", !!pos.tucked && pos.side !== "right");
+        bar.classList.toggle("tucked", !!pos.tucked);
+        // reserve bottom clearance ONLY while the bubble rests at/near its default bottom spot (not tucked,
+        // and low on the screen). Dragged up or tucked away → drop the class so there's no dead space.
+        var atBottom = !pos.tucked && (pos.top + bsize) >= (vh() - 130);
+        document.body.classList.toggle("butter-atbottom", atBottom);
+      }
+      applyPos();
+      window.addEventListener("resize", applyPos);
+
+      bar.addEventListener("pointerdown", function (e) {
+        bdown = true; bmoved = false; bsx = e.clientX; bsy = e.clientY;
+        const r = bar.getBoundingClientRect(); bbaseL = r.left; bbaseT = r.top;
+        bpid = e.pointerId; bar.classList.add("dragging");
+        try { bar.setPointerCapture(bpid); } catch (_) {}
+      });
+      bar.addEventListener("pointermove", function (e) {
+        if (!bdown) return;
+        const dx = e.clientX - bsx, dy2 = e.clientY - bsy;
+        if (!bmoved && Math.abs(dx) + Math.abs(dy2) > 6) bmoved = true;
+        if (bmoved) {
+          e.preventDefault();
+          bar.classList.remove("tuck-left", "tuck-right", "tucked");
+          bar.style.left = (bbaseL + dx) + "px";
+          bar.style.top = clampTop(bbaseT + dy2) + "px";
+        }
+      });
+      function endBubble() {
+        if (!bdown) return; bdown = false; bar.classList.remove("dragging");
+        try { bar.releasePointerCapture(bpid); } catch (_) {}
+        if (!bmoved) {                                   // a tap, not a drag
+          if (pos.tucked) { pos.tucked = false; savePos(); applyPos(); }  // peeking sliver → slide back in
+          else openButter();                                              // normal → open the chat
+          return;
+        }
+        const r = bar.getBoundingClientRect();
+        pos.side = (r.left + bsize / 2) < vw() / 2 ? "left" : "right";
+        pos.top = r.top;
+        pos.tucked = r.left < -bsize * 0.2 || r.right > vw() + bsize * 0.2;  // flung past an edge → tuck away
+        savePos(); applyPos();
+      }
+      bar.addEventListener("pointerup", endBubble);
+      bar.addEventListener("pointercancel", endBubble);
+      bar.addEventListener("dragstart", function (e) { e.preventDefault(); });
+      bar.addEventListener("click", function (e) {       // block the <a> navigation; keyboard-activate still opens
+        e.preventDefault();
+        if (e.detail === 0) { if (pos.tucked) { pos.tucked = false; savePos(); applyPos(); } else openButter(); }
+      });
+      document.getElementById("butterBackdrop").addEventListener("click", closeButter);
+      var _bClose = document.getElementById("butterClose"); if (_bClose) _bClose.addEventListener("click", closeButter);
+      // Esc closes it too
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && !sheet.classList.contains("hidden")) closeButter();
+      });
+      // drag the grabber down to dismiss (the chat is an iframe and swallows its own touches, so the header is the handle)
+      let dragging = false, startY = 0, dy = 0;
+      head.addEventListener("pointerdown", function (e) {
+        dragging = true; startY = e.clientY; dy = 0; panel.style.transition = "none";
+        try { head.setPointerCapture(e.pointerId); } catch (e2) {}
+      });
+      head.addEventListener("pointermove", function (e) {
+        if (!dragging) return;
+        dy = Math.max(0, e.clientY - startY);           // downward only
+        panel.style.transform = "translateY(" + dy + "px)";
+      });
+      function endDrag() {
+        if (!dragging) return; dragging = false;
+        panel.style.transition = "transform .25s ease";
+        if (dy > 90) { panel.style.transform = "translateY(100%)"; setTimeout(closeButter, 220); }  // far enough → close
+        else { panel.style.transform = "translateY(0)"; }                                           // snap back
+      }
+      head.addEventListener("pointerup", endDrag);
+      head.addEventListener("pointercancel", endDrag);
+
+      // pull-to-dismiss forwarded from inside the chat iframe (butter.html): when the chat is scrolled to
+      // its top and the baker keeps pulling DOWN, the sheet peels down with slight resistance and closes
+      // past a threshold — the native-sheet feel, even though the iframe swallows its own touches.
+      // Tunable: 0.5 = pull resistance (higher = looser); 120 = px pulled before it closes (mitigates accidents).
+      let pullActive = false;
+      window.addEventListener("message", function (e) {
+        const d = e.data;
+        if (!d || d.type !== "butterPull") return;
+        if (frame && e.source !== frame.contentWindow) return;   // only our butter iframe
+        if (sheet.classList.contains("hidden")) return;
+        if (d.phase === "move") {
+          pullActive = true;
+          panel.style.transition = "none";
+          panel.style.transform = "translateY(" + (Math.max(0, d.dy) * 0.5) + "px)";
+        } else if (d.phase === "end") {
+          if (!pullActive) return; pullActive = false;
+          panel.style.transition = "transform .25s ease";
+          if (d.dy > 120) { panel.style.transform = "translateY(100%)"; setTimeout(closeButter, 220); }
+          else { panel.style.transform = "translateY(0)"; }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

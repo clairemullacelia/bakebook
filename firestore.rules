@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      // The parent doc holds SERVER-ONLY control fields (premium, usage, strikes, banned).
+      // The browser may READ them (to know its own plan/ban state) but must NEVER write them —
+      // only Cloud Functions (admin SDK, which bypasses these rules) set them. This stops a
+      // savvy user from granting themselves premium or clearing a ban in dev-tools.
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+
+      // Recipes: one document per recipe. The owner reads/writes their own freely.
+      match /recipes/{recipeId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      // Small owner-writable metadata (e.g. category names).
+      match /meta/{doc} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}

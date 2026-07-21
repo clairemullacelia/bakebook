@@ -1,0 +1,13 @@
+{
+  "name": "bakebook-functions",
+  "description": "bakebook's backend — a secure proxy to Claude so butter needs no user API key",
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^5.1.0"
+  },
+  "private": true
+}
