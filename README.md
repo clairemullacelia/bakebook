@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="bakebook/wordmark.svg" alt="bakebook" width="260">
+<p><img src="bakebook/wordmark.svg" alt="bakebook" width="260"></p>
 
-**A recipe app for people who change their recipes.**
+<p><b>A recipe app for people who change their recipes.</b></p>
 
-[App Store](https://apps.apple.com/us/app/bakebook-recipe-lab/id6791304387) · Google Play (rolling out) · [bakebook.co](https://bakebook.co)
+<p><a href="https://apps.apple.com/us/app/bakebook-recipe-lab/id6791304387">App Store</a> · Google Play (rolling out) · <a href="https://bakebook.co">bakebook.co</a></p>
 
 </div>
 
