@@ -91,7 +91,7 @@ similar). The real ones are public identifiers, but they belong to the live app.
 
 ## How I built it
 
-I am a product designer. I built bakebook with Claude Code, Anthropic's coding tool that runs
+I am a product and visual designer. I built bakebook with Claude Code, Anthropic's coding tool that runs
 in the terminal. I made the product and design calls, and directed and checked the work. Claude
 Code wrote most of the code.
 
