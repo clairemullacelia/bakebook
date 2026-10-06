@@ -11,29 +11,39 @@
   <title>bakebook — recipe</title>
   <link rel="stylesheet" href="styles.css?v=16">
   <style>
+    html { background: var(--paper); }   /* cream ground so page-to-page navigation never flashes white */
     body { margin: 0 auto; max-width: 480px;
-      padding: calc(1.5rem + env(safe-area-inset-top, 0px)) 1.5rem calc(1rem + env(safe-area-inset-bottom, 0px)); }
-    /* reserve the extra bottom clearance for the floating butter bubble ONLY while it rests at/near its
-       default bottom spot (body.butter-atbottom, set by the bubble logic). Dragged up or tucked → no dead
-       space. Skipped while editing, which reserves its own room for the floating save pill (body.editing). */
-    body.butter-atbottom:not(.editing) { padding-bottom: calc(3rem + env(safe-area-inset-bottom, 0px)); }
+      padding: calc(1.5rem + env(safe-area-inset-top, 0px)) 1.5rem calc(0.4rem + env(safe-area-inset-bottom, 0px)); }
+    /* No extra bottom reservation for the resting butter bubble — it floats mid-lower-left over content
+       (its default rest spot is well above the page bottom), so the old 3rem reserve was just dead space
+       below the last button. Base body padding is enough. (Editing still reserves room for the save pill.) */
     /* "saved ✓" flash — fixed near the BOTTOM of the screen, right where the "save recipe" button is,
        so it lands in front of the baker's eyes the moment they tap save (no scrolling up to find it). */
     .saved-flash { position: fixed; bottom: calc(1.1rem + env(safe-area-inset-bottom, 0px)); left: 50%; z-index: 500;
-      transform: translateX(-50%) translateY(10px); background: #e9f3da; color: #4f6b32;
-      border: 1px solid #cdd8b0; font-weight: 800; font-size: 1.02rem; padding: 0.6rem 1.4rem;
-      border-radius: 999px; box-shadow: 0 6px 20px rgba(58,42,32,.22); opacity: 0; pointer-events: none;
+      transform: translateX(-50%) translateY(10px); background: var(--cream); color: var(--ink);
+      border: 1px solid #E2C2B9; font-weight: 800; font-size: 1.02rem; padding: 0.6rem 1.4rem;
+      border-radius: 999px; box-shadow: 0 6px 20px rgba(30,23,20,.22); opacity: 0; pointer-events: none;
       transition: opacity .18s ease, transform .18s ease; }
     .saved-flash.show { opacity: 1; transform: translateX(-50%) translateY(0); }
     a.back { color: var(--terracotta-deep); text-decoration: none; font-size: 0.95rem;
       display: inline-block; padding: 0.45rem 0.6rem 0.45rem 0; }   /* bigger tap target so it's easy to hit near the top */
-    .status { float: right; font-size: 0.8rem; color: #7a8a5a; min-height: 1rem; }
+    .status { position: absolute; top: calc(0.95rem + env(safe-area-inset-top, 0px)); left: max(1.5rem, calc(50% - 240px + 1.5rem)); z-index: 139; font-size: 0.8rem; color: var(--teal); }   /* top-left, lined up with the page text, opposite the home logo (it used to run under the logo) */
+    /* always-available "home" escape hatch, top-right on every deep page (guards unsaved edits) */
+    /* bare "home" icon (b + measurement mark), top-right on every deep page — no bubble */
+    .home-btn { position: fixed; top: calc(0.55rem + env(safe-area-inset-top, 0px)); right: 0.95rem; z-index: 140;
+      background: none; border: none; padding: 0.3rem; cursor: pointer; -webkit-tap-highlight-color: transparent;
+      display: flex; align-items: center; justify-content: center; }
+    .home-btn img { height: 1.5rem; width: auto; display: block; }
+    .home-btn:active { opacity: 0.6; }
     input, textarea, select { width: 100%; box-sizing: border-box; padding: 0.45rem 0.8rem;
       border: 1px solid var(--field-line); border-radius: 10px; font-size: 1rem; font-family: inherit;
       background: var(--card); color: var(--ink); }
     input.title { font-family: var(--display); font-variation-settings: "opsz" 34; color: var(--heading);
       font-size: 1.7rem; font-weight: 600; letter-spacing: -0.3px; margin: 0.75rem 0 0.5rem; }
     textarea.desc { margin-bottom: 0.25rem; }
+    /* optional time · makes — one light inline meta line right under the name (edit mode) */
+    .tvrow { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.3rem 1.4rem; margin: 0.1rem 0 0.7rem; }
+    .tvlbl { font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); }
     .ing-controls { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 0.75rem; }
     .seg { display: inline-flex; background: var(--cream); border: 1px solid var(--border); border-radius: 999px; padding: 2px; }
     .seg button { border: none; background: none; padding: 0.32rem 0.75rem; border-radius: 999px; font-family: inherit;
@@ -44,23 +54,49 @@
     .viewrow .v-amt { flex: 0 0 7rem; font-weight: 700; color: var(--ink); }
     .viewrow .v-name { flex: 1; color: var(--ink); }
     /* ---- read-only VIEW mode ---- */
-    .topactions { display: flex; justify-content: flex-end; margin: 0.25rem 0 0.5rem; }
+    .topactions { display: flex; justify-content: flex-end; margin: 0.25rem 0 0.5rem; padding-right: 2.7rem; }   /* clear the fixed home icon in the top-right corner */
     .editbtn { background: none; border: 1.5px solid var(--terracotta); color: var(--terracotta-deep);
       border-radius: 999px; padding: 0.3rem 0.95rem; font-weight: 700; font-family: inherit; font-size: 0.9rem; cursor: pointer; }
     .editbtn.done { background: var(--terracotta-deep); color: var(--paper); border-color: var(--terracotta-deep); }
+    /* eyebrow above the title — category in teal monospace, uppercase, with a trailing hairline (brand card) */
+    .reyebrow { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--warm); font-weight: 600; display: flex; align-items: center; gap: 0.7em; margin: 0.3rem 0 0.15rem; }
+    .reyebrow::after { content: ""; flex: 1; height: 1px; background: var(--grid); }
     .rtitle { font-size: 1.95rem; margin: 0.1rem 0 0.3rem; }
-    .rdesc { padding: 0.2rem 0 0; margin: 0.3rem 0 1rem; color: var(--ink); }
-    .rsection { text-align: center; font-size: 1.35rem; color: var(--accent); margin: 1.4rem 0 0.7rem; }
+    /* meta line under the title — monospace + muted, like the "72% hydration · …" line in the brand card */
+    .rdesc { padding: 0.2rem 0 0; margin: 0.3rem 0 1rem; color: var(--muted); font-family: var(--mono); font-size: 0.82rem; letter-spacing: 0.01em; line-height: 1.5; }
+    /* time · makes — the recipe's key stats, mono (a touch bolder/darker than the description) */
+    .rmeta { font-family: var(--mono); font-size: 0.85rem; font-weight: 600; color: var(--ink); letter-spacing: 0.01em; margin: 0.35rem 0 0.15rem; }
+    /* version links — sleek inline pointer to a recipe's OTHER versions (no pills, current one never listed) */
+    .vlinks { font-family: var(--mono); font-size: 0.82rem; letter-spacing: 0.02em; color: var(--muted); margin: 0.7rem 0 0.2rem; line-height: 1.9; }
+    .vlinks .vlbl { display: flex; align-items: center; gap: 0.35rem; background: none; border: none; padding: 0; cursor: pointer;
+      font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.15em; font-size: 0.66rem; font-weight: 700; color: var(--heading); margin-bottom: 0.1rem; }
+    .vlinks .vcaret { font-size: 0.62rem; color: var(--muted); transition: transform 0.18s ease; }
+    .vlinks.collapsed .vcaret { transform: rotate(-90deg); }
+    .vlist { display: flex; flex-wrap: wrap; align-items: baseline; }   /* whole names wrap to the next line, never mid-word */
+    .vlinks.collapsed .vlist { display: none; }
+    .vitem { white-space: nowrap; }   /* a name + its trailing dot stay together as one unit */
+    .vlinks a { color: var(--teal-dark); text-decoration: none; border-bottom: 1px solid transparent; cursor: pointer; }
+    .vlinks a:hover { border-bottom-color: var(--teal-dark); }
+    .vlinks .vsep { color: var(--muted); margin: 0 0.5rem; font-weight: 700; }
+    .vlinks .vplus { color: var(--muted); white-space: nowrap; }
+    /* "a version of X" line at the very top of a variation — replaces the old banner block */
+    .vmaster { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin: 0.1rem 0 0.15rem; }
+    .vmaster a { color: var(--teal-dark); text-decoration: none; cursor: pointer; }
+    .vmaster a:hover { text-decoration: underline; }
+    /* section labels (ingredients / method / photos) — charcoal monospace, uppercase, left-aligned (brand card), not centered teal */
+    .rsection { text-align: left; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.13em; font-size: 0.8rem; font-weight: 700; color: var(--heading); margin: 1.7rem 0 0.7rem; }
     .rmethod { padding-left: 1.4rem; line-height: 1.55; color: var(--ink); }
     .rmethod li { margin-bottom: 0.55rem; padding-left: 0.2rem; }
-    .ing-table { border: 1px solid var(--grid); border-radius: 10px; overflow: hidden; background: var(--card); }
+    /* boxless ingredient list (brand card) — no outer frame; the rows sit on the page, split by hairlines only */
+    .ing-table { border: none; border-radius: 0; overflow: visible; background: none; }
     .ing-head { display: flex; border-bottom: 1px solid var(--grid); }
     .ing-head .hcell { flex: 1; border: none; background: none; padding: 0.45rem; font-family: inherit;
       font-size: 0.85rem; font-weight: 700; color: var(--muted); cursor: pointer; }
     .ing-head .hcell.on { color: var(--terracotta-deep); text-decoration: underline; }
     /* custom-scale slider (replaces the native prompt popup) */
     .scale-slider { padding: 0.4rem 0.75rem 0.5rem; border-bottom: 1px solid var(--border); background: var(--cream); }
-    .scale-slider .sval { text-align: center; font-family: var(--body); font-weight: 700; font-size: 0.72rem;
+    .scale-slider .sval { text-align: center; font-family: var(--mono); font-weight: 700; font-size: 0.72rem;
       letter-spacing: 0.03em; color: var(--terracotta-deep); margin-bottom: 0.22rem; }
     .scale-slider input[type=range] { -webkit-appearance: none; appearance: none; display: block; width: 100%; max-width: 210px;
       margin: 0 auto; height: 4px; border-radius: 999px; background: var(--tan); outline: none; }
@@ -72,20 +108,22 @@
     .scale-ticks { display: flex; justify-content: space-between; max-width: 210px; margin: 0.2rem auto 0; font-size: 0.62rem; color: var(--muted); }
     .ing-line { display: grid; grid-template-columns: 5.5rem 1fr 2.2rem; align-items: stretch; border-bottom: 1px solid var(--grid); }
     .ing-line:last-child { border-bottom: none; }
-    .il-amt { display: flex; align-items: center; padding: 0.55rem 0.7rem; font-family: var(--body); font-style: italic; color: var(--ink); border-right: 1px solid var(--grid); }
-    .il-name { display: flex; align-items: center; padding: 0.55rem 0.7rem; font-family: var(--body); font-style: italic; color: var(--ink); }
+    /* amounts — teal monospace quantities (the brand card's "500 g"); upright, right-aligned, no column rule */
+    .il-amt { display: flex; align-items: center; justify-content: flex-end; text-align: right; padding: 0.55rem 0.7rem; font-family: var(--mono); font-weight: 600; color: var(--teal-dark); }
+    /* names — upright dark sans, a touch larger (the brand card's "bread flour") */
+    .il-name { display: flex; align-items: center; padding: 0.55rem 0.7rem; font-family: var(--body); color: var(--ink); font-size: 1.02rem; }
     .il-note { display: flex; align-items: center; justify-content: center; }
     .notebtn { background: none; border: none; cursor: pointer; color: var(--muted); padding: 4px; display: flex; }
-    .notebtn.has { color: var(--terracotta-deep); }
+    .notebtn.has { color: var(--warm); }
     /* has-a-note state: fill the icon solid so it clearly stands out vs. the empty outline */
-    .notebtn.has svg { fill: var(--terracotta-deep); stroke: var(--terracotta-deep); stroke-width: 1.75; }
+    .notebtn.has svg { fill: var(--warm); stroke: var(--warm); stroke-width: 1.75; }
     .il-noterow { padding: 0.35rem 0.75rem 0.5rem 0.75rem; font-size: 0.8rem; font-style: italic; color: var(--muted); background: var(--cream); border-bottom: 1px solid var(--border); }
     .note-editor { padding: 0.4rem 0.7rem; border-bottom: 1px solid var(--border); background: var(--cream); }
     .note-editor textarea { width: 100%; box-sizing: border-box; }
     /* collapsible per-line notes (ingredients + steps) */
     .note-area { border-bottom: 1px solid var(--border); background: var(--cream); padding: 0.4rem 0.7rem; }
     .note-input { width: 100%; box-sizing: border-box; font-family: var(--body); font-style: italic; }
-    .note-text { font-size: 0.85rem; font-style: italic; color: var(--ink); cursor: text; white-space: pre-wrap; }
+    .note-text { font-size: 0.85rem; font-style: italic; color: var(--ink); cursor: text; white-space: pre-wrap; }   /* charcoal, not terracotta — warm text read as an error; the terracotta note icon stays as the accent */
     /* method as glanceable numbered rows */
     .method-list { border-top: 1px solid var(--border); }
     .method-row { display: grid; grid-template-columns: 1.7rem 1fr 2.2rem; gap: 0.3rem; align-items: start;
@@ -121,13 +159,13 @@
     .hier-btn:hover { border-color: var(--terracotta); }
     label { display: block; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
       color: var(--muted); margin: 1rem 0 0.35rem; }
-    .section-title { font-family: var(--display); font-weight: 800; font-size: 1.15rem; color: var(--accent);
-      letter-spacing: -0.2px; border-top: 1px solid var(--border); padding-top: 1.1rem; margin: 1.6rem 0 0.7rem; }
+    .section-title { font-family: var(--mono); font-weight: 700; font-size: 0.8rem; text-transform: uppercase; color: var(--heading);
+      letter-spacing: 0.13em; border-top: 1px solid var(--border); padding-top: 1.1rem; margin: 1.6rem 0 0.7rem; }
     .row { display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.5rem; }
-    .row .amount { flex: 0 0 4rem; }
+    .row .amount { flex: 0 0 5.2rem; font-family: var(--mono); }
     .row .unit { flex: 0 0 5.5rem; }
     .row .iname { flex: 1; }
-    .row .stepnum { flex: 0 0 1.2rem; font-weight: 700; text-align: center; }
+    .row .stepnum { flex: 0 0 1.2rem; font-family: var(--mono); font-weight: 700; text-align: center; color: var(--teal-dark); }
     .row .steptext { flex: 1; }
     /* method step editor grows to fit the whole step (no fixed one-line box that hides the end of a long step) */
     .row textarea.steptext { resize: none; overflow: hidden; line-height: 1.4; min-height: 2.6rem; }
@@ -139,7 +177,7 @@
       touch-action: none; -webkit-user-select: none; user-select: none; }
     .draghandle:active { cursor: grabbing; color: var(--terracotta-deep); }
     .row.dragging { position: relative; z-index: 20; background: var(--card); border-radius: 10px;
-      box-shadow: 0 7px 20px rgba(58,42,32,.20); }
+      box-shadow: 0 7px 20px rgba(30,23,20,.20); }
     .rowdisp { flex: 1; min-width: 0; display: flex; gap: 0.5rem; align-items: baseline;
       padding: 0.5rem 0.3rem; border-radius: 8px; cursor: default;
       -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }   /* protected text: press & hold drags the row — it must NOT start an iOS text selection/magnifier */
@@ -159,9 +197,12 @@
       bottom: calc(0.9rem + env(safe-area-inset-bottom, 0px)); width: calc(100% - 2.4rem); max-width: 456px;
       padding: 0.72rem; font-size: 0.98rem; font-weight: 700; letter-spacing: 0.2px;
       color: var(--paper); background: var(--terracotta-deep); border: none; border-radius: 999px; cursor: pointer;
-      box-shadow: 0 6px 22px rgba(90,50,30,.30); }
-    button.saverecipe:hover { background: #8F4634; }
+      box-shadow: 0 6px 22px rgba(30,23,20,.30); }
+    button.saverecipe:hover { background: #00647C; }
     body.editing { padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)); }
+    /* while editing, every toast (a notice, "undo", "saved ✓") sits just above the floating save pill
+       instead of on top of it, so the pill's label stays readable. View mode keeps them where they were. */
+    body.editing .bb-notice, body.editing .undo-toast, body.editing .saved-flash { bottom: calc(4.4rem + env(safe-area-inset-bottom, 0px)); }
     button.log { display: block; width: 100%; margin-top: 0.6rem; padding: 0.5rem; font-size: 0.92rem; font-weight: 700;
       color: var(--terracotta-deep); background: var(--card); border: 1.5px solid var(--border); border-radius: 999px; cursor: pointer; }
     button.log:hover { border-color: var(--terracotta); }
@@ -211,12 +252,12 @@
     .sel-list { position: absolute; left: 0; top: 100%; z-index: 60; margin-top: 3px;
       min-width: 100%; width: max-content; max-width: 16rem;
       background: var(--card); border: 1px solid var(--border); border-radius: 10px;
-      box-shadow: 0 6px 18px rgba(58,42,32,.16); max-height: 240px; overflow-y: auto; }
+      box-shadow: 0 6px 18px rgba(30,23,20,.16); max-height: 240px; overflow-y: auto; }
     .sel-opt { padding: 0.5rem 0.7rem; cursor: pointer; font-size: 0.95rem; white-space: nowrap; }
     .sel-opt:hover { background: var(--cream); }
     .sel-opt.on { color: var(--terracotta-deep); font-weight: 700; }
     .hidden { display: none; }
-    .lib-card { border: 1px solid var(--border); border-radius: 10px; padding: 0.5rem 0.7rem; margin-bottom: 0.5rem; background: var(--paper); }
+    .lib-card { border: 1px solid var(--border); border-radius: 10px; padding: 0.5rem 0.7rem; margin-bottom: 0.5rem; background: var(--card); }
     .lib-name { font-weight: 600; margin-bottom: 0.35rem; }
     .lib-controls { display: flex; align-items: center; gap: 0.4rem; }
     /* iOS-style amount wheel: flick up to increase, down to decrease; double-tap to type */
@@ -226,22 +267,22 @@
       cursor: ns-resize; touch-action: none; user-select: none; -webkit-user-select: none;
       transition: transform .12s ease; }
     /* while scrolling/dragging: enlarge slightly + light up a bar across the current amount */
-    .wheel.grabbing { border-color: var(--terracotta); box-shadow: 0 0 0 3px rgba(190,111,93,.15); transform: scale(1.16); }
+    .wheel.grabbing { border-color: var(--terracotta); box-shadow: 0 0 0 3px rgba(0,126,156,.15); transform: scale(1.16); }
     .wheel .wheel-val { font-weight: 700; font-size: 1rem; color: var(--ink); line-height: 1.05;
       align-self: stretch; text-align: center; border-radius: 3px; }
-    .wheel.grabbing .wheel-val { background: rgba(190,111,93,.22); }
+    .wheel.grabbing .wheel-val { background: rgba(0,126,156,.22); }
     .wheel .wheel-ghost { font-size: 0.7rem; color: var(--muted); opacity: 0.5; line-height: 1.05; }
     .wheel::before, .wheel::after { content: ""; position: absolute; left: 0; right: 0; height: 0.7rem; pointer-events: none; z-index: 1; }
     .wheel::before { top: 0; background: linear-gradient(var(--card), rgba(255,252,247,0)); }
     .wheel::after { bottom: 0; background: linear-gradient(rgba(255,252,247,0), var(--card)); }
     .wheel.editing { border-color: var(--terracotta); }
     .wheel.editing .wheel-val, .wheel.editing .wheel-ghost { display: none; }
-    .wheel-edit { width: 2.8rem; text-align: center; border: none; background: transparent; padding: 0;
+    .wheel-edit { width: 2.8rem; text-align: center; border: none; background: transparent; padding: 0; font-family: var(--mono);
       font-weight: 700; font-size: 1rem; color: var(--ink); outline: none; font-family: var(--body); }
     .wheel-edit:focus { box-shadow: none; }
     .step { width: 28px; height: 28px; border: 1px solid var(--border); background: var(--card); border-radius: 10px; cursor: pointer; font-size: 1rem; line-height: 1; padding: 0; }
-    .lib-amt { width: 3.2rem; text-align: center; padding: 0.35rem; }
-    .lib-unit { width: auto; padding: 0.35rem; }
+    .lib-amt { width: 3.2rem; text-align: center; padding: 0.35rem; font-family: var(--mono); }
+    .lib-unit { width: auto; padding: 0.35rem; font-family: var(--mono); }
     .lib-add { margin-left: auto; padding: 0.35rem 0.8rem; font-weight: 700; background: var(--terracotta-deep); color: var(--paper); border: none; border-radius: 999px; cursor: pointer; }
     .lib-grid { max-height: 300px; overflow-y: auto; margin-top: 0.5rem; padding-right: 0.25rem; }
     .lib-amt { touch-action: none; }
@@ -249,20 +290,20 @@
       border-radius: 10px; padding: 0.7rem 1rem; margin-bottom: 0.5rem; }
     .recipe-card:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
     .recipe-card h3 { margin: 0 0 0.2rem; font-size: 1.05rem; }
-    .meta { color: var(--terracotta-deep); font-size: 0.85rem; margin: 0; }
+    .meta { font-family: var(--mono); color: var(--terracotta-deep); font-size: 0.8rem; margin: 0; letter-spacing: 0.01em; }
     .var-banner { background: var(--cream); border-radius: 10px; padding: 0.6rem 0.9rem; margin: 0.75rem 0;
       color: var(--ink); cursor: pointer; }
 
     /* ---- "start cooking" entry button + full-screen cook mode ---- */
     .cookbtn { display: block; width: 100%; margin: 0.6rem 0 0.2rem; padding: 0.66rem; font-size: 1rem; font-weight: 700; letter-spacing: 0.2px;
       color: var(--paper); background: var(--terracotta-deep); border: none; border-radius: 999px; cursor: pointer;
-      box-shadow: 0 3px 12px rgba(165,83,63,.32); }
-    .cookbtn:hover { background: #8F4634; }
+      box-shadow: 0 3px 12px rgba(0,126,156,.32); }
+    .cookbtn:hover { background: #00647C; }
     #cookMode { position: fixed; top: 0; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px;
       z-index: 400; background: var(--paper); display: flex; flex-direction: column; box-sizing: border-box;
       overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }   /* whole-screen scroll: a step taller than the phone grows the stage and the WHOLE frame scrolls as one page (step first, ingredients below) so no line is ever clipped and the true top is reachable. When everything already fits, the stage flex-grows to fill exactly, so there's nothing to scroll and no bounce. Guards on the iPhone WKWebView traps stay: overflow-x is pinned hidden (overflow-y:auto silently enables overflow-x too → sideways drift), overscroll-behavior:contain kills rubber-band chaining, and we deliberately never set -webkit-overflow-scrolling:touch (it rubber-bands a full-screen element even with nothing to scroll). */
     .cook-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; padding: calc(0.9rem + env(safe-area-inset-top, 0px)) 1.1rem 0.4rem; flex: none; }
-    .cook-progress { font-family: var(--body); font-weight: 800; font-size: 0.82rem; color: var(--accent); letter-spacing: 0.05em; text-transform: uppercase; }
+    .cook-progress { font-family: var(--mono); font-weight: 700; font-size: 0.8rem; color: var(--teal-dark); letter-spacing: 0.08em; text-transform: uppercase; }
     .cook-comp { font-family: var(--display); font-size: 0.95rem; color: var(--muted); flex: 1; text-align: center;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .cook-exit { background: none; border: none; color: var(--muted); font-size: 1.5rem; cursor: pointer; line-height: 1; padding: 0.1rem 0.3rem; }
@@ -297,32 +338,31 @@
     .cook-scrub-preview { position: absolute; z-index: 6; transform: translateX(-50%);
       background: var(--ink); color: var(--paper); font-family: var(--body); font-weight: 600; font-size: 0.82rem;
       padding: 0.32rem 0.62rem; border-radius: 9px; max-width: 18rem; white-space: nowrap; overflow: hidden;
-      text-overflow: ellipsis; pointer-events: none; box-shadow: 0 5px 16px rgba(40,25,15,.3); }
+      text-overflow: ellipsis; pointer-events: none; box-shadow: 0 5px 16px rgba(30,23,20,.3); }
     .cook-scrub-preview::after { content: ""; position: absolute; left: 50%; bottom: -5px; transform: translateX(-50%);
       border: 5px solid transparent; border-top-color: var(--ink); border-bottom: none; }
     /* ingredients: always shown in full below the step — the whole screen just scrolls (no drawer to
        open, nothing capped). Simpler than a tap-to-expand box. */
-    .cook-ings { flex: 0 0 auto; min-height: 0; max-height: 42vh; display: flex; flex-direction: column;
-      border-top: 1px solid var(--border); background: var(--card); }
-    .cook-ings-head { flex: none; display: flex; align-items: center; width: 100%; box-sizing: border-box; padding: 0.7rem 1.1rem 0.45rem; }
-    .cook-ings-head .lbl { flex: 1; font-family: var(--display); font-weight: 600; font-size: 1rem; color: var(--heading); }
-    .cook-ings-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
-      -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-      padding: 0 1.1rem calc(1rem + env(safe-area-inset-bottom, 0px)); }
-    .cook-ings.expanded .cook-ings-body { display: block; }
+    /* ingredients: no cap, no inner scroll box — they render at full natural height below the step and
+       the WHOLE #cookMode page scrolls as one. (Was max-height:42vh + overflow-y:auto, which trapped
+       them in a weird little scroll window — Claire's long-standing complaint.) */
+    .cook-ings { flex: 0 0 auto; border-top: 1px solid var(--border); background: var(--card); }
+    .cook-ings-head { display: flex; align-items: center; width: 100%; box-sizing: border-box; padding: 0.7rem 1.1rem 0.45rem; }
+    .cook-ings-head .lbl { flex: 1; font-family: var(--mono); font-weight: 700; font-size: 0.78rem; letter-spacing: 0.13em; text-transform: uppercase; color: var(--heading); }
+    .cook-ings-body { padding: 0 1.1rem calc(1rem + env(safe-area-inset-bottom, 0px)); }
     .cook-ing { display: flex; gap: 0.7rem; padding: 0.28rem 0; border-bottom: 1px solid var(--border); font-size: 0.95rem; }
     .cook-ing:last-child { border-bottom: none; }
-    .cook-ing .a { flex: 0 0 5.5rem; font-weight: 700; color: var(--accent); }
+    .cook-ing .a { flex: 0 0 5.5rem; font-family: var(--mono); font-weight: 600; color: var(--teal-dark); }
     .cook-ing .n { flex: 1; color: var(--ink); }
     /* butter — small floating helper button, tucked into the bottom-left, out of the way */
     .butter-fab { position: fixed; left: 1rem; bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); z-index: 120;
       width: 3.15rem; height: 3.15rem; border-radius: 50%; padding: 0; background: var(--card);
-      border: 1px solid #EFE7CB; box-shadow: 0 4px 14px rgba(58,42,32,.16); cursor: grab;
+      border: 2px solid var(--accent); box-shadow: 0 0 0 2px rgba(0,126,156,.10), 0 4px 15px rgba(0,126,156,.26); cursor: grab;
       display: flex; align-items: center; justify-content: center;
       touch-action: none; -webkit-user-select: none; user-select: none; -webkit-user-drag: none;
       transition: left .22s cubic-bezier(.22,1,.36,1), top .22s cubic-bezier(.22,1,.36,1), transform .22s cubic-bezier(.22,1,.36,1), opacity .18s ease; }
-    .butter-fab:hover { border-color: var(--terracotta); background: #FFFDF7; }
-    .butter-fab.dragging { transition: none; cursor: grabbing; box-shadow: 0 8px 22px rgba(58,42,32,.26); }
+    @media (hover: hover) { .butter-fab:hover { border-color: var(--teal-dark); } }   /* pointer-only: no sticky cream bg after a tap on touch */
+    .butter-fab.dragging { transition: none; cursor: grabbing; box-shadow: 0 8px 22px rgba(30,23,20,.26); }
     .butter-fab.tucked { opacity: .5; }
     .butter-fab.tucked:hover { opacity: 1; }
     .butter-fab.tuck-left { transform: translateX(-62%); }
@@ -330,9 +370,9 @@
     .butter-fab img { height: 1.7rem; width: 1.7rem; display: block; pointer-events: none; -webkit-user-drag: none; }
     /* butter popup — a bottom sheet over the recipe page (same as home) */
     .butter-sheet { position: fixed; inset: 0; z-index: 300; }
-    .butter-sheet-backdrop { position: absolute; inset: 0; background: rgba(40,25,15,.34); }
+    .butter-sheet-backdrop { position: absolute; inset: 0; background: rgba(30,23,20,.34); }
     .butter-sheet-panel { position: absolute; left: 0; right: 0; bottom: 0; height: 90vh; max-width: 480px; margin: 0 auto;
-      background: #FFFDF5; border-radius: 16px 16px 0 0; box-shadow: 0 -8px 30px rgba(40,25,15,.28);
+      background: #FFFDF5; border-radius: 16px 16px 0 0; box-shadow: 0 -8px 30px rgba(30,23,20,.28);
       display: flex; flex-direction: column; overflow: hidden; }
     .butter-sheet-head { position: relative; height: 46px; flex: none; touch-action: none; cursor: grab; }
     .butter-sheet-close { position: absolute; left: 10px; top: 9px; background: none; border: none; cursor: pointer; color: var(--muted); padding: 4px; display: flex; }
@@ -351,21 +391,46 @@
     @keyframes coachBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
     /* the explanation bubble — matches the app's branded dialogs (cream card, terracotta button) */
     .coach-tip { position: fixed; z-index: 403; max-width: 16rem; box-sizing: border-box; background: var(--card); color: var(--ink);
-      border: 1px solid var(--border); padding: 0.85rem 0.95rem 0.8rem; border-radius: 16px; box-shadow: 0 10px 28px rgba(40,25,15,.22); }
+      border: 1px solid var(--border); padding: 0.85rem 0.95rem 0.8rem; border-radius: 16px; box-shadow: 0 10px 28px rgba(30,23,20,.22); }
     .coach-tip p { margin: 0 0 0.7rem; font-family: var(--body); font-size: 0.92rem; line-height: 1.45; color: var(--ink); }
     .coach-tip button { display: block; margin-left: auto; background: var(--terracotta-deep); color: var(--paper); border: none;
       border-radius: 999px; padding: 0.4rem 1.05rem; font-size: 0.85rem; font-weight: 700; font-family: var(--body); cursor: pointer; }
-    /* cook-mode step note — shown only when the current step has a note */
+    /* cook-mode note row: always shows "+ note"; the "note" pill joins it only when the current step has a note */
     .cook-note { flex: none; text-align: center; padding: 0 1.1rem 0.2rem; }
     .cook-notebtn { display: inline-flex; align-items: center; gap: 0.32rem; background: none; border: 1px solid var(--border);
       color: var(--terracotta-deep); border-radius: 999px; padding: 0.2rem 0.72rem; font-size: 0.8rem; font-family: var(--body); cursor: pointer; }
     .cook-notebody { display: none; max-width: 24rem; margin: 0.45rem auto 0; padding: 0.5rem 0.75rem; text-align: left;
       background: var(--cream); border: 1px solid var(--border); border-radius: 10px; font-size: 0.9rem; font-style: italic; color: var(--ink); white-space: pre-wrap; }
     .cook-note.open .cook-notebody { display: block; }
+    .cook-note .cook-notebtn { vertical-align: middle; }
+    /* the gap sits on the "note" pill, so a hidden pill takes its gap with it and "+ note" stays centred */
+    .cook-note .cook-notebtn:not(.cook-addnote) { margin-right: 0.4rem; }
+    /* recipe-level notes (view mode): below the method */
+    .rnotes { margin: 0 0 0.6rem; color: var(--ink); font-size: 0.95rem; line-height: 1.5; white-space: pre-wrap; }
+    textarea.notes-edit { margin-bottom: 0.25rem; }
+    /* make-it pop-ups: the note box and the quick bake log (on top of the bb-modal look) */
+    .bb-form-card { position: relative; max-width: 360px; text-align: left; }
+    .bb-form-card .bb-modal-title { text-align: center; padding: 0 1.2rem; }
+    .bb-card-x { position: absolute; top: 0.5rem; right: 0.6rem; background: none; border: none; color: var(--muted);
+      font-size: 1.45rem; line-height: 1; padding: 0.2rem 0.4rem; cursor: pointer; }
+    .bb-form-sub { font-family: var(--mono); font-size: 0.76rem; letter-spacing: 0.04em; color: var(--muted); text-align: center; margin: 0 0 0.9rem; }
+    .bb-form-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin: 0.7rem 0 0.3rem; }
+    .bb-form-lbl { font-family: var(--mono); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--heading); }
+    .bb-none { background: none; border: 1px solid var(--border); border-radius: 999px; padding: 0.15rem 0.7rem;
+      font-family: var(--body); font-size: 0.8rem; color: var(--muted); cursor: pointer; }
+    .bb-none.on { background: var(--accent-tint); border-color: var(--teal); color: var(--teal-dark); font-weight: 700; }
+    textarea.bb-form-input { display: block; resize: vertical; }
+    textarea.bb-form-input:disabled { opacity: 0.45; }
+    .bb-form-card .bb-modal-actions { margin-top: 1rem; }
+    .bb-actions-stack { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem; }
+    /* a bake waiting for its results: small dot on the log book button */
+    .log-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); margin-left: 0.45em; vertical-align: 0.1em; }
   </style>
 </head>
 <body>
-  <a class="back" href="index.html">← my recipes</a>
+  <button class="home-btn" id="homeBtn" type="button" aria-label="home" title="home">
+    <img src="home.svg" alt="home">
+  </button>
   <span class="status" id="status"></span>
   <div id="app"></div>
 
@@ -383,8 +448,14 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
   <script src="firebase-init.js"></script>
+  <script src="bakebook-events.js"></script>   <!-- the event log: what people do, never what they wrote -->
   <script src="bakebook-store.js"></script>
+  <script src="bakebook-butter-sync.js"></script>
   <script src="bakebook-billing.js"></script>
+  <script src="bakebook-units.js"></script>  <!-- the unit list + the bottom sheet you pick one from -->
+  <script src="bakebook-meta.js"></script>   <!-- time + serves: tap-to-add fields with a scrolling sheet -->
+  <script src="bakebook-ingredients.js"></script>  <!-- the ingredient library: learned from your recipes, duplicates merged -->
+  <script src="bakebook-back.js"></script>   <!-- Android back gesture: one step back, never quit -->
   <script>
     // must be signed in to view a recipe (it lives in your cloud account)
     firebase.auth().onAuthStateChanged(function (u) { if (!u) location.replace("index.html"); });
@@ -395,6 +466,22 @@
       if (!el) { el = document.createElement("div"); el.id = "bbNotice"; el.className = "bb-notice"; document.body.appendChild(el); }
       el.textContent = msg; el.classList.add("show");
       clearTimeout(el._t); el._t = setTimeout(function () { el.classList.remove("show"); }, 2600);
+    }
+
+    // Tapping the dim area around a dialog closes it, but only for a tap that STARTED on that dim area.
+    // Why: some dialogs open the moment a finger lifts (butter's bubble, a swipe). The phone then sends a
+    // "click" for that same tap a moment later, and it lands on the dim area of the dialog that just opened.
+    // Without this check that stray click shut the dialog before the baker could read it. A real later tap
+    // always presses down on the dim area first, so it still closes the dialog.
+    function closeOnOutsideTap(modal, onOutside) {
+      let startedOutside = false;
+      function down(e) { startedOutside = (e.target === modal); }
+      modal.addEventListener("pointerdown", down);
+      modal.addEventListener("touchstart", down, { passive: true });
+      modal.addEventListener("click", function (e) {
+        const ok = startedOutside && e.target === modal; startedOutside = false;
+        if (ok) onOutside();
+      });
     }
 
     // ---- bakebook's own confirm dialog (on-brand; replaces the OS confirm() box) ----
@@ -427,7 +514,7 @@
         function onKey(e) { if (e.key === "Escape") close(false); if (e.key === "Enter") close(true); }
         cancel.addEventListener("click", function () { close(false); });
         ok.addEventListener("click", function () { close(true); });
-        modal.addEventListener("click", function (e) { if (e.target === modal) close(false); });
+        closeOnOutsideTap(modal, function () { close(false); });
         document.addEventListener("keydown", onKey);
         ok.focus();
       });
@@ -439,31 +526,83 @@
     // We use EXPLICIT save (a Save button) instead of auto-save. Edits update the
     // recipe in memory and mark it "dirty"; nothing is written to the browser until Save.
     let dirty = false;
+    // The recipe exactly as this page last loaded or saved it (with the mirror fields flattened, the way it
+    // is stored). A save compares the page's copy against this to see which parts the baker changed HERE;
+    // every other part is taken from the freshest stored copy, so a change another device made to a
+    // different part (while you were editing, say) is never saved over with this page's older copy.
+    let pageBase = null;
+    // Flatten ALL components into the mirror fields (ingredients / steps / stepNotes) so butter / home /
+    // search see the whole recipe. Components are the source of truth; the mirrors are just a copy.
+    function flattenMirrors(r) {
+      if (!r.components) return;
+      const fi = [], fs = [], fn = [];
+      r.components.forEach(function (c) {
+        (c.ingredients || []).forEach(function (x) { fi.push(x); });
+        (c.steps || []).forEach(function (x) { fs.push(x); });
+        (c.stepNotes || []).forEach(function (x) { fn.push(x); });
+      });
+      r.ingredients = fi; r.steps = fs; r.stepNotes = fn;
+    }
+    // the two fix-ups the page makes to every recipe it opens: a photos list, and at least one component
+    // (a flat recipe becomes a single default component; components = source of truth)
+    function normalizeRecipe(r) {
+      if (!r.photos) r.photos = [];
+      if (!r.components) {
+        r.components = [{ name: "", ingredients: r.ingredients || [], steps: r.steps || [], stepNotes: r.stepNotes || [] }];
+      }
+    }
+    // a stored-shape copy of a recipe (fixed up the same way, mirrors flattened), to compare part by part
+    function storedShape(r) { const c = JSON.parse(JSON.stringify(r)); normalizeRecipe(c); flattenMirrors(c); return c; }
+    // same content? (the order of an object's keys doesn't count: a copy from the cloud can come back reordered)
+    function sortKeys(v) {
+      if (Array.isArray(v)) return v.map(sortKeys);
+      if (v && typeof v === "object") { const o = {}; Object.keys(v).sort().forEach(function (k) { o[k] = sortKeys(v[k]); }); return o; }
+      return v;
+    }
+    function sameJson(a, b) {
+      if (a === undefined || b === undefined) return a === b;
+      return JSON.stringify(sortKeys(a)) === JSON.stringify(sortKeys(b));
+    }
     function markDirty() {
       dirty = true;
       const s = document.getElementById("status");
       s.textContent = "● unsaved changes"; s.style.color = "var(--danger)";
     }
+    // While editing, if this recipe changed on another device (changedElsewhere), NOTHING is saved until the
+    // baker picks "keep mine" or "load the other version". Until then an edit that would normally save straight
+    // away (switching part tabs, moving or removing a part, a butter edit...) stays on this page only, marked
+    // "unsaved", so "load the other version" can still throw it away.
+    function savesOnHold() { return editing && changedElsewhere; }
     function saveNow() {
-      recipe.updatedAt = Date.now();   // stamp the edit time (used for "recently edited" sort)
-      // flatten ALL components into the mirror fields so butter / home / search see the whole recipe
-      if (recipe.components) {
-        const fi = [], fs = [], fn = [];
-        recipe.components.forEach(function (c) {
-          (c.ingredients || []).forEach(function (x) { fi.push(x); });
-          (c.steps || []).forEach(function (x) { fs.push(x); });
-          (c.stepNotes || []).forEach(function (x) { fn.push(x); });
-        });
-        recipe.ingredients = fi; recipe.steps = fs; recipe.stepNotes = fn;
+      if (savesOnHold()) {
+        if (recipe.components) setComp(compIndex);   // keep the active part's rows on screen, as a real save does
+        markDirty(); return;
       }
+      recipe.updatedAt = Date.now();   // stamp the edit time (used for "recently edited" sort)
+      flattenMirrors(recipe);
       try {
         // re-read the freshest list so a save updates ONLY this recipe and never clobbers an
         // edit that just synced in from another device.
         let fresh; try { fresh = JSON.parse(localStorage.getItem("bakebook.recipes")) || []; } catch (e) { fresh = recipes; }
         const idx = fresh.findIndex(function (r) { return r && r.id === recipe.id; });
+        // Part by part: a part the baker didn't change on this page takes the freshest stored version (it
+        // may have just arrived from another device). Changed on the in-memory recipe itself, so everything
+        // the page is showing keeps pointing at the same object.
+        if (idx >= 0 && pageBase) {
+          const stored = storedShape(fresh[idx]), keys = {};   // fixed up like the page's copy, so a fix-up never looks like a change
+          [recipe, pageBase, stored].forEach(function (o) { Object.keys(o).forEach(function (k) { keys[k] = 1; }); });
+          Object.keys(keys).forEach(function (k) {
+            if (!sameJson(recipe[k], pageBase[k]) || sameJson(recipe[k], stored[k])) return;   // changed here, or already the same
+            if (stored[k] === undefined) delete recipe[k]; else recipe[k] = stored[k];
+          });
+          normalizeRecipe(recipe);
+          flattenMirrors(recipe);   // components are the source of truth: rebuild the mirrors from them
+          if (compIndex >= recipe.components.length) compIndex = 0;   // the other device removed the part you were on
+        }
         if (idx >= 0) fresh[idx] = recipe; else fresh.push(recipe);
         recipes = fresh;
         localStorage.setItem("bakebook.recipes", JSON.stringify(recipes));
+        pageBase = storedShape(recipe);   // what's stored now is the new starting point for the next save
       } catch (err) {
         bbNotice("couldn't save — storage is full. try removing a photo to free up space.");
         if (recipe.components) setComp(compIndex);
@@ -472,8 +611,43 @@
       if (recipe.components) setComp(compIndex);   // restore active-component mirror for continued editing
       dirty = false;
       const s = document.getElementById("status");
-      s.textContent = "saved ✓"; s.style.color = "#7a8a5a";
+      s.textContent = ""; s.style.color = "";   // clear the top-right status: the bottom "saved ✓" pill confirms the save, and this kept overlapping the home icon and never went away
       flashSaved();
+      refreshStepIngredients();   // (re)map which ingredients each step uses, for cook mode
+    }
+    // Persist THIS recipe's step-ingredient map into the freshest list (used by the async map below).
+    // Only those two fields are copied over: writing the whole in-memory recipe here could save unsaved
+    // edits early, or put this page's older copy of other parts over a change from another device.
+    function persistThisRecipe() {
+      try {
+        let fresh; try { fresh = JSON.parse(localStorage.getItem("bakebook.recipes")) || []; } catch (e) { fresh = recipes; }
+        const idx = fresh.findIndex(function (r) { return r && r.id === recipe.id; });
+        if (idx >= 0) {
+          ["stepIngredients", "stepIngHash"].forEach(function (k) {
+            if (recipe[k] === undefined) { delete fresh[idx][k]; if (pageBase) delete pageBase[k]; }
+            else { fresh[idx][k] = recipe[k]; if (pageBase) pageBase[k] = JSON.parse(JSON.stringify(recipe[k])); }
+          });
+          recipes = fresh; localStorage.setItem("bakebook.recipes", JSON.stringify(recipes));
+        }
+      } catch (e) {}
+    }
+    // After a save, (re)compute which ingredients each step uses so cook-mode shows only the relevant ones.
+    // A cheap Haiku call on its own Cloud Function path (doesn't touch the butter limit). Runs in the
+    // background, skips work when the ingredients/steps haven't changed, and just leaves the recipe
+    // map-less if it fails (cook mode then shows all — never worse).
+    function refreshStepIngredients() {
+      const ings = (recipe.ingredients || []).filter(function (x) { return x && (x.name || "").trim(); }).map(function (x) { return x.name.trim(); });
+      const steps = (recipe.steps || []).filter(function (s) { return s && String(s).trim(); }).map(function (s) { return String(s).trim(); });
+      const hash = JSON.stringify([ings, steps]);
+      if (ings.length < 2 || steps.length < 1) {
+        if (recipe.stepIngredients) { delete recipe.stepIngredients; delete recipe.stepIngHash; persistThisRecipe(); }
+        return;
+      }
+      if (recipe.stepIngHash === hash && recipe.stepIngredients) return;   // nothing relevant changed
+      firebase.functions().httpsCallable("mapStepIngredients")({ ingredients: ings, steps: steps }).then(function (res) {
+        const map = (res && res.data && Array.isArray(res.data.steps)) ? res.data.steps : null;
+        if (map && map.length === steps.length) { recipe.stepIngredients = map; recipe.stepIngHash = hash; persistThisRecipe(); }
+      }).catch(function () {});
     }
     // flash "saved ✓" fixed at the top of the SCREEN (visible even when scrolled down a long recipe)
     function flashSaved() {
@@ -510,11 +684,86 @@
       function close(cb) { if (done) return; done = true; modal.classList.remove("show"); document.removeEventListener("keydown", onKey); setTimeout(function () { modal.remove(); }, 180); if (cb) cb(); }
       function onKey(e) { if (e.key === "Escape") close(null); }                 // Escape = keep editing
       leave.addEventListener("click", function () { close(onLeave); });
-      save.addEventListener("click", function () { close(function () { saveNow(); onLeave(); }); });
-      modal.addEventListener("click", function (e) { if (e.target === modal) close(null); });  // tap outside = keep editing
+      save.addEventListener("click", function () {
+        close(function () {
+          // changed on another device while you were editing? ask which version wins first. "keep mine"
+          // pushes the save up before leaving (at most 2.5 s), so the next page can't load the cloud's
+          // copy without it.
+          if (savesOnHold()) {
+            chooseVersion(function () {
+              saveNow();
+              if (!window.bakebookFlush) { onLeave(); return; }
+              let flushed; try { flushed = bakebookFlush(); } catch (e) { onLeave(); return; }
+              Promise.race([Promise.resolve(flushed), new Promise(function (r) { setTimeout(r, 2500); })]).then(onLeave, onLeave);
+            });
+            return;
+          }
+          saveNow(); onLeave();
+        });
+      });
+      closeOnOutsideTap(modal, function () { close(null); });  // tap outside = keep editing
       document.addEventListener("keydown", onKey);
       save.focus();
     }
+    // The open recipe changed on another device while you were editing. Before a save that ends edit mode,
+    // the baker chooses: "keep mine" (save; only the parts changed here are written, so the other device's
+    // changes to other parts stay) or "load the other version" (throw away the unsaved edits and show the
+    // recipe as it is now). Nothing is written until a button is tapped; tapping outside or Escape just
+    // goes back to editing. Same look as the leave dialog above. `onElse` (optional) runs when the action that
+    // asked does NOT go ahead: "load the other version", tapping outside, or Escape.
+    function chooseVersion(onKeep, onElse) {
+      const modal = document.createElement("div"); modal.className = "bb-modal"; modal.id = "versionChoice";
+      const card = document.createElement("div"); card.className = "bb-modal-card";
+      const h = document.createElement("div"); h.className = "bb-modal-title"; h.textContent = "this recipe changed on another device while you were editing.";
+      const actions = document.createElement("div"); actions.className = "bb-modal-actions";
+      const other = document.createElement("button"); other.type = "button"; other.className = "bb-btn bb-btn-cancel"; other.textContent = "load the other version";
+      const mine = document.createElement("button"); mine.type = "button"; mine.className = "bb-btn bb-btn-confirm"; mine.textContent = "keep mine";
+      actions.appendChild(other); actions.appendChild(mine);
+      card.appendChild(h); card.appendChild(actions);
+      modal.appendChild(card); document.body.appendChild(modal);
+      requestAnimationFrame(function () { modal.classList.add("show"); });
+      let done = false;
+      function close(cb) { if (done) return; done = true; modal.classList.remove("show"); document.removeEventListener("keydown", onKey); setTimeout(function () { modal.remove(); }, 180); if (cb) cb(); }
+      function notKept() { if (onElse) onElse(); }
+      function onKey(e) { if (e.key === "Escape") close(notKept); }              // Escape = keep editing
+      other.addEventListener("click", function () { close(function () { loadOtherVersion(); notKept(); }); });
+      mine.addEventListener("click", function () { close(function () { changedElsewhere = false; onKeep(); }); });   // lifts the hold, so the save goes through
+      closeOnOutsideTap(modal, function () { close(notKept); });  // tap outside = keep editing
+      document.addEventListener("keydown", onKey);
+      mine.focus();
+    }
+    // "load the other version": drop the unsaved edits, leave edit mode, and show the stored copy (which
+    // already holds the other device's change).
+    function loadOtherVersion() {
+      dirty = false; editing = false; changedElsewhere = false;
+      const s = document.getElementById("status"); if (s) { s.textContent = ""; s.style.color = ""; }
+      startRecipe();
+      window.scrollTo(0, 0);
+    }
+    // Save and then do `next`, for saves that end edit mode. Asks first if the recipe changed elsewhere.
+    function saveEndingEdit(next) {
+      if (savesOnHold()) { chooseVersion(function () { saveNow(); next(); }); return; }
+      saveNow(); next();
+    }
+    // For actions that need unsaved edits saved first because they leave this page or hand the stored copy to
+    // someone else (butter, a variation, a link): save if there's anything unsaved, then do `next`. If the
+    // recipe changed on another device, ask first; `onElse` runs if the baker doesn't keep theirs.
+    // After "keep mine" the save can swap in the other device's parts (see saveNow), as NEW objects. The rows on
+    // screen still point at the old ones, so a later edit would change a copy nothing saves. When the page stays
+    // in edit mode (the butter sheet opens over it, say), rebuild it at the same scroll spot, as the save button does.
+    function saveThen(next, onElse) {
+      if (savesOnHold() && dirty) {
+        chooseVersion(function () {
+          saveNow();
+          if (editing) { const y = window.scrollY; buildPage(); window.scrollTo(0, y); }
+          next();
+        }, onElse);
+        return;
+      }
+      if (dirty) saveNow();
+      next();
+    }
+
     // Tapping "← my recipes" holds navigation only if there are unsaved edits, then asks.
     document.querySelectorAll("a.back").forEach(function (a) {
       a.addEventListener("click", function (e) {
@@ -524,6 +773,18 @@
         confirmLeave(function () { location.href = href; });
       });
     });
+    // "home" icon (top-right): always one tap back to home, same unsaved-edits guard as the back link.
+    document.getElementById("homeBtn").addEventListener("click", function () {
+      if (dirty) confirmLeave(function () { location.href = "index.html"; });
+      else location.href = "index.html";
+    });
+    // The Android back gesture (bakebook-back.js) takes the same route as the home icon: ask first
+    // if there are unsaved edits, otherwise straight to my recipes. Lives here because `dirty` is
+    // only visible inside this page's script.
+    window.bbBackToRecipes = function () {
+      if (dirty) confirmLeave(function () { location.href = "index.html"; });
+      else location.href = "index.html";
+    };
 
     // Swipe RIGHT to go back to "my recipes" — mirrors the back link (same unsaved-edits guard).
     // Guarded so it never hijacks the scale slider, text inputs, buttons/links, the sort menu, or an
@@ -538,6 +799,7 @@
       document.addEventListener("touchstart", function (e) {
         if (e.touches.length !== 1) { tracking = false; return; }
         if (document.getElementById("cookMode")) { tracking = false; return; }      // cook mode open → its own step-swipe owns the gesture
+        if (document.querySelector(".cook-pop")) { tracking = false; return; }       // the make-it note / bake log pop-up is open → never navigate away under it
         const lb = document.getElementById("lightbox");
         if (lb && lb.classList.contains("open")) { tracking = false; return; }       // photo viewer open → swipe moves photos, never navigates
         const bs = document.getElementById("butterSheet");
@@ -643,9 +905,12 @@
         if (!down) return; down = false; touchActed = true;   // a touch gesture finished → suppress the click it also fires
         const t = e.changedTouches && e.changedTouches[0]; if (!t) return;
         const dx = t.clientX - sx, dy = t.clientY - sy;
-        if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) { lbGo(dx < 0 ? 1 : -1); return; }   // decisive swipe → move photo
-        if (!moved) closeLightbox();                                                                // a tap → close
-      }, { passive: true });
+        // preventDefault cancels the emulated click the browser fires ~after touchend. Without it, closing on
+        // touchend hides the viewer and that ghost click lands on whatever button was behind it (share / log
+        // book), opening that page instead of just exiting the photo. Needs passive:false to be allowed.
+        if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) { e.preventDefault(); lbGo(dx < 0 ? 1 : -1); return; }   // decisive swipe → move photo
+        if (!moved) { e.preventDefault(); closeLightbox(); }                                          // a tap → close
+      }, { passive: false });
       // Mouse (non-touch) fallback: a plain click on the photo/backdrop closes; arrows are handled above.
       box.addEventListener("click", function (e) {
         if (e.target.closest(".cook-arrow")) return;
@@ -658,9 +923,10 @@
     const id = new URLSearchParams(location.search).get("id");
     let recipes = loadRecipes();
     let recipe = recipes.find(function (r) { return r.id === id; });   // the actual object in the array
+    if (window.bbLogOpened) bbLogOpened(id);
 
     const app = document.getElementById("app");
-    const UNITS = ["g", "kg", "ml", "l", "cups", "tbsp", "tsp", "oz", "pinch", "each"];
+    const UNITS = window.BB_UNITS;   // the one list, in bakebook-units.js (the picker lives there too)
 
     // ---- ingredient library (common ingredients + your most-used, learned live) ----
     const COMMON_INGREDIENTS = [
@@ -684,16 +950,19 @@
       if (unit === "g" || unit === "ml") return 100;   // dry/liquid weigh-or-pour amounts
       return 1;                                          // each, pinch, tsp, tbsp, cups, kg, l, oz → 1
     }
+    // The library entries: your own ingredients learned from every saved recipe plus the common ones,
+    // duplicates merged, most-used first, at most 100 (bakebook-ingredients.js does the work). Each entry
+    // is { name, key, count, lastUsed, amount, unit }; amount and unit are the ones you used last, or
+    // null for a common ingredient you have not used yet.
     function getLibrary() {
-      const counts = {};
-      recipes.forEach(function (r) {
-        (r.ingredients || []).forEach(function (ing) {
-          const n = (ing.name || "").trim().toLowerCase();
-          if (n) counts[n] = (counts[n] || 0) + 1;
-        });
-      });
-      // only common whole ingredients; float the ones you use most to the top (imported/custom names stay out)
-      return COMMON_INGREDIENTS.slice().sort(function (a, b) { return (counts[b] || 0) - (counts[a] || 0); });
+      return bbBuildLibrary(recipes, COMMON_INGREDIENTS);
+    }
+    // the amount and unit a library card starts on: what you used last, else a sensible default
+    function libraryQtyFor(entry) {
+      const parsed = Math.round(parseAmount(entry.amount) * 100) / 100;   // reads "1/2" and "½" properly (parseFloat read them as 1 and NaN), then two decimals so "1/3" reads 0.33
+      const learned = parsed > 0 ? parsed : NaN;   // no number in what you typed (or 0) counts as "nothing learned"
+      const unit = entry.unit || defaultUnitFor(entry.name);
+      return { amount: isNaN(learned) ? defaultAmountFor(unit) : learned, unit: unit };
     }
     // Press-and-hold a step button to keep changing fast (accelerates the longer you hold).
     function attachHold(btn, action) {
@@ -752,10 +1021,12 @@
     });
 
     function renderLibrary(gridEl, term, onAdd) {
-      const t = (term || "").trim().toLowerCase();
-      const shown = getLibrary().filter(function (n) { return t === "" || n.indexOf(t) !== -1; });
+      // matches on the entry's name and its cleaned-up key, so "ap" still finds "all purpose flour"
+      const shown = getLibrary().filter(function (e) { return bbIngredientMatches(e, term); });
       gridEl.innerHTML = "";
-      shown.forEach(function (name) {
+      shown.forEach(function (entry) {
+        const name = entry.name;
+        const q0 = libraryQtyFor(entry);                    // what you used last for THIS ingredient, else a sensible default
         const card = document.createElement("div"); card.className = "lib-card";
         const nm = document.createElement("div"); nm.className = "lib-name"; nm.textContent = name;
         const ctr = document.createElement("div"); ctr.className = "lib-controls";
@@ -765,7 +1036,7 @@
         const vEl = document.createElement("span"); vEl.className = "wheel-val";
         const gDn = document.createElement("span"); gDn.className = "wheel-ghost";
         wheel.appendChild(gUp); wheel.appendChild(vEl); wheel.appendChild(gDn);
-        let val = defaultAmountFor(defaultUnitFor(name));   // smart starting amount (1 tsp, 1 each, 100 g…)
+        let val = q0.amount;
         function drawWheel() { vEl.textContent = val; gUp.textContent = val + 1; gDn.textContent = Math.max(0, val - 1); }
         function setVal(v) { val = Math.max(0, Math.round(v)); drawWheel(); }
         drawWheel();
@@ -815,7 +1086,7 @@
           clearTimeout(wheelIdle); wheelIdle = setTimeout(function () { wheel.classList.remove("grabbing"); }, 260);
         }, { passive: false });
 
-        const unit = makeSelect(UNITS, defaultUnitFor(name), null, { className: "lib-unit" });
+        const unit = bbUnitPicker(q0.unit, null, { className: "lib-unit" });
         const add = document.createElement("button"); add.className = "lib-add"; add.type = "button"; add.textContent = "+";
         add.addEventListener("click", function () { onAdd(String(val), unit.value, name); });
         ctr.appendChild(wheel); ctr.appendChild(unit); ctr.appendChild(add);
@@ -828,6 +1099,7 @@
 
     // ---- scaling + unit conversion (display-only; the stored recipe stays as entered) ----
     let editing = false;       // recipe pages open in read-only VIEW mode; toggle to edit
+    let changedElsewhere = false; // while editing: the open recipe changed on another device (asks on save)
     let scale = 1;             // display multiplier
     let scaleSliderOpen = false; // custom-scale slider shown under the scale header
     let displayUnit = 'g';     // view table unit: 'g' | 'cups'
@@ -840,8 +1112,8 @@
       // point the mirror fields at the active component so all existing edit/render code "just works"
       recipe.ingredients = c.ingredients; recipe.steps = c.steps; recipe.stepNotes = c.stepNotes;
     }
-    const MASS = { g: 1, kg: 1000, oz: 28.3495 };                                  // → grams
-    const VOL_CUPS = { cups: 1, cup: 1, tbsp: 1/16, tsp: 1/48, ml: 1/236.588, l: 1000/236.588 };  // → cups ("cup" and "cups" both, since imports use either)
+    const MASS = { g: 1, kg: 1000, oz: 28.3495, lb: 453.592 };                     // → grams
+    const VOL_CUPS = { cups: 1, cup: 1, tbsp: 1/16, tsp: 1/48, "fl oz": 1/8, pt: 2, qt: 4, gal: 16, ml: 1/236.588, l: 1000/236.588 };  // → cups ("cup" and "cups" both, since imports use either)
     // grams per cup for common ingredients (volume↔weight needs a per-ingredient density)
     const DENSITY = [
       ["bread flour",130],["cake flour",114],["almond flour",96],["ap flour",125],["flour",125],
@@ -993,6 +1265,7 @@
       const panel = sheet.querySelector(".butter-sheet-panel");
       const head = sheet.querySelector(".butter-sheet-head");
       function closeSheet() { if (window.bbUnlockScroll) window.bbUnlockScroll("butter"); sheet.classList.add("hidden"); panel.style.transition = ""; panel.style.transform = ""; }
+      window.bbCloseButter = closeSheet;   // so the Android back gesture (bakebook-back.js) can close the popup too
       sheet.querySelector("#butterBackdrop").addEventListener("click", closeSheet);
       var _bClose = sheet.querySelector("#butterClose"); if (_bClose) _bClose.addEventListener("click", closeSheet);
       document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !sheet.classList.contains("hidden")) closeSheet(); });
@@ -1039,7 +1312,10 @@
       return sheet;
     }
     function openButterSheet() {
-      if (dirty) saveNow();   // save first so butter reads the latest recipe
+      // save first so butter reads the latest recipe (asks first if it changed on another device mid-edit)
+      saveThen(showButterSheet);
+    }
+    function showButterSheet() {
       const sheet = ensureButterSheet();
       const frame = sheet.querySelector("#butterFrame");
       // pass the active component so butter edits whatever part the baker is currently on
@@ -1062,6 +1338,21 @@
 
       // the baker sent their first butter message — stop butter's first-run coach bounce permanently
       if (m.type === "bakebookButterMessageSent") { markButterCoached(); return; }
+
+      // butter's saved-conversation cloud backup — the embedded popup can't reach Firestore itself
+      // (its iframe auth can be null), so it relays saves/deletes/subscriptions through this page.
+      if (m.type === "bakebookButterConvSave") { if (window.bakebookButterConvStore) bakebookButterConvStore.save(m.entry).catch(function () {}); return; }
+      if (m.type === "bakebookButterConvDelete") { if (window.bakebookButterConvStore) bakebookButterConvStore.remove(m.id).catch(function () {}); return; }
+      if (m.type === "bakebookButterConvSubscribe") {
+        if (window.bakebookButterConvStore && e.source) {
+          const src = e.source;
+          if (window._bbConvUnsub) { try { window._bbConvUnsub(); } catch (x) {} }   // drop any prior listener
+          window._bbConvUnsub = bakebookButterConvStore.subscribe(function (list) {
+            try { src.postMessage({ type: "bakebookButterConvSnapshot", entries: list }, "*"); } catch (x) {}
+          });
+        }
+        return;
+      }
 
       // relay a butter call through this (signed-in) page so the popup doesn't depend on its own iframe auth
       if (m.type === "bakebookButterCall") {
@@ -1127,13 +1418,18 @@
             (cc.steps || []).forEach(function (x) { variation.steps.push(x); });
             (cc.stepNotes || []).forEach(function (x) { variation.stepNotes.push(x); });
           });
-          if (dirty) saveNow();   // save any pending edits to the master first
-          let fresh; try { fresh = JSON.parse(localStorage.getItem("bakebook.recipes")) || []; } catch (e2) { fresh = recipes; }
-          fresh.push(variation);
-          recipes = fresh;
-          localStorage.setItem("bakebook.recipes", JSON.stringify(recipes));
-          ackV(true);
-          location.href = "recipe.html?id=" + encodeURIComponent(variation.id);   // open the new variation
+          // save any pending edits to the master first (asks first if it changed on another device mid-edit)
+          saveThen(function () {
+            try {
+              let fresh; try { fresh = JSON.parse(localStorage.getItem("bakebook.recipes")) || []; } catch (e2) { fresh = recipes; }
+              fresh.push(variation);
+              recipes = fresh;
+              localStorage.setItem("bakebook.recipes", JSON.stringify(recipes));
+              if (window.bbLog) bbLog("recipe_created", { recipeId: variation.id, kind: "butter_variation" });
+              ackV(true);
+              location.href = "recipe.html?id=" + encodeURIComponent(variation.id);   // open the new variation
+            } catch (err) { ackV(false, "couldn't create the variation."); }
+          }, function () { ackV(false, "pick which version of the recipe to keep first."); });
         } catch (err) { ackV(false, "couldn't create the variation."); }
         return;
       }
@@ -1169,6 +1465,9 @@
     });
 
     // ---- first-time coach marks: flash each less-obvious tool; the user taps one to learn it, at their pace ----
+    // Onboarding flags are ACCOUNT-scoped (suffixed with the uid), NOT device-scoped: a fresh account on a
+    // device that's used bakebook before should still get the tool guides. (Mirrors index.html's obKey.)
+    function obFlag(base) { return base + "." + (localStorage.getItem("bakebook.uid") || "anon"); }
     const COACH_DEFS = [
       { key: "makeit",  sel: ".cookbtn",   msg: "tap “make it” for a big, full-screen step-by-step view — swipe or tap through each step as you bake." },
       { key: "note",    sel: ".notebtn",   msg: "see this little page icon? tap it to jot a note on any ingredient or step." },
@@ -1189,7 +1488,7 @@
       requestAnimationFrame(function () {
         coachActive = [];
         (defs || COACH_DEFS).forEach(function (d) {
-          if (localStorage.getItem("bakebook.coach2." + d.key)) return;   // already learned — don't flash
+          if (localStorage.getItem(obFlag("bakebook.coach2." + d.key))) return;   // already learned — don't flash
           const el = document.querySelector(d.sel);
           if (el) { el.classList.add("coach-flash"); coachActive.push({ key: d.key, el: el, msg: d.msg }); }
         });
@@ -1213,7 +1512,7 @@
           showCoachTip(item, function () {
             coachBusy = false; coachCurrent = null;
             item.el.classList.remove("coach-flash");
-            try { localStorage.setItem("bakebook.coach2." + item.key, "1"); } catch (e) {}   // learned — never flash again
+            try { localStorage.setItem(obFlag("bakebook.coach2." + item.key), "1"); } catch (e) {}   // learned — never flash again
             coachActive = coachActive.filter(function (x) { return x !== item; });
             if (!coachActive.length && coachListenerOn) { document.removeEventListener("click", coachIntercept, true); coachListenerOn = false; }
           });
@@ -1248,7 +1547,7 @@
     // butter has no "got it" tip; instead its first-run bounce stops for good the first time the baker
     // sends a message in the chat (signalled from butter.html via postMessage). Persist + stop the flash now.
     function markButterCoached() {
-      try { localStorage.setItem("bakebook.coach2.butter", "1"); } catch (e) {}   // learned — never flash again
+      try { localStorage.setItem(obFlag("bakebook.coach2.butter"), "1"); } catch (e) {}   // learned — never flash again
       const fab = document.getElementById("butterFab");
       if (fab) fab.classList.remove("coach-flash");
       coachActive = coachActive.filter(function (x) { return x.key !== "butter"; });
@@ -1377,19 +1676,166 @@
       if (displayUnit === 'cups') { const c = toCups(a, ing.unit, d); return (c == null) ? plainAmount(a, ing.unit) : fmtCups(c); }
       const g = toGrams(a, ing.unit, d); return (g == null) ? plainAmount(a, ing.unit) : fmtGrams(g);
     }
+    // Close a make-it pop-up on a tap outside its card. Same rule as closeOnOutsideTap, plus one more case:
+    // a click with no finger behind it (detail 0) is the Android back gesture tapping the backdrop for us.
+    function closeOnPopOutside(modal, onOutside) {
+      closeOnOutsideTap(modal, onOutside);
+      modal.addEventListener("click", function (e) { if (e.target === modal && e.detail === 0) onOutside(); });
+    }
+
+    // Does any bake on this recipe still wait for its results (saved with "later", results still empty)?
+    // Worked out from the bakes themselves, so the dot is right on every device.
+    function hasPendingResults(r) {
+      return ((r && r.logs) || []).some(function (l) { return l && l.resultsPending && !String(l.notes || "").trim(); });
+    }
+    function addPendingDot(btn) {
+      if (!hasPendingResults(recipe)) return;
+      const dot = document.createElement("span"); dot.className = "log-dot";
+      dot.title = "a bake is waiting for its results"; dot.setAttribute("aria-label", "a bake is waiting for its results");
+      btn.appendChild(dot);
+    }
+
+    // Save one new bake from Make It. Like the logbook's save: only the bakes and the edit time change, on the
+    // FRESHEST stored copy, with the new bake added at the end. Everything else keeps its stored value.
+    function saveCookBake(entry) {
+      let fresh; try { fresh = JSON.parse(localStorage.getItem("bakebook.recipes")) || []; } catch (e) { fresh = recipes; }
+      const at = fresh.findIndex(function (r) { return r && r.id === recipe.id; });
+      if (at < 0) { bbNotice("couldn't save the bake. log it from the log book instead."); return false; }
+      const r = fresh[at];
+      r.logs = (Array.isArray(r.logs) ? r.logs : []).concat([entry]);
+      r.updatedAt = Date.now();
+      try { localStorage.setItem("bakebook.recipes", JSON.stringify(fresh)); }
+      catch (e) { bbNotice("couldn't save. storage is full, try removing a photo to free up space."); return false; }
+      recipes = fresh;
+      // this page's copy and its starting point both get the same bakes, so a later save here sees no bake change
+      recipe.logs = JSON.parse(JSON.stringify(r.logs)); recipe.updatedAt = r.updatedAt;
+      if (pageBase) { pageBase.logs = JSON.parse(JSON.stringify(r.logs)); pageBase.updatedAt = r.updatedAt; }
+      if (window.bbLog) bbLog("bake_logged", { recipeId: recipe.id });
+      if (!editing) { const y = window.scrollY; buildPage(); window.scrollTo(0, y); }   // redraw: the log book dot
+      return true;
+    }
+
+    // ---- leaving Make It after a real bake: a quick bake log over the recipe page ----
+    // 1. date + time (filled in) and the two changes, each "none" or written in, then "next"
+    // 2. "ready to log results?" yes = type them now; later = save now, results added in the log book
+    // Tapping outside, the ×, Escape or back closes it and saves nothing.
+    function openBakeLogPopup() {
+      const now = new Date();
+      const date = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");   // the baker's own clock, as the log book uses
+      const time = String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
+      const MON = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+      const h12 = (now.getHours() % 12) || 12;
+      const when = MON[now.getMonth()] + " " + now.getDate() + ", " + now.getFullYear() + " · " + h12 + ":" + String(now.getMinutes()).padStart(2, "0") + (now.getHours() < 12 ? " am" : " pm");
+
+      const modal = document.createElement("div"); modal.className = "bb-modal cook-pop bake-pop";
+      const card = document.createElement("div"); card.className = "bb-modal-card bb-form-card";
+      modal.appendChild(card); document.body.appendChild(modal);
+      let done = false;
+      function shut() { if (done) return; done = true; modal.classList.remove("show"); document.removeEventListener("keydown", onKey); setTimeout(function () { modal.remove(); }, 180); }
+      function onKey(e) { if (e.key === "Escape") shut(); }
+      // the card gets shorter when it changes screen, so the second tap of a quick double tap on "next" can land
+      // on the background. A background tap that soon after a screen change is that tap, not a wish to close.
+      let screenAt = 0;
+      closeOnPopOutside(modal, function () { if (Date.now() - screenAt > 400) shut(); });
+      document.addEventListener("keydown", onKey);
+
+      function fresh(titleText) {   // start a screen: the × and a title
+        card.innerHTML = ""; screenAt = Date.now();
+        const x = document.createElement("button"); x.type = "button"; x.className = "bb-card-x"; x.innerHTML = "&times;"; x.setAttribute("aria-label", "close without logging");
+        x.addEventListener("click", shut);
+        const h = document.createElement("div"); h.className = "bb-modal-title"; h.textContent = titleText;
+        card.appendChild(x); card.appendChild(h);
+      }
+      function changeField(label, key) {   // a change: write it in, or tap "none"
+        const row = document.createElement("div"); row.className = "bb-form-row";
+        const l = document.createElement("label"); l.className = "bb-form-lbl"; l.textContent = label;
+        const none = document.createElement("button"); none.type = "button"; none.className = "bb-none"; none.textContent = "none";
+        row.appendChild(l); row.appendChild(none);
+        const ta = document.createElement("textarea"); ta.className = "bb-form-input"; ta.rows = 2; ta.placeholder = "what did you change?";
+        ta.setAttribute("aria-label", label); ta.dataset.key = key;
+        none.addEventListener("click", function () {
+          const on = !none.classList.contains("on");
+          none.classList.toggle("on", on); ta.disabled = on;
+          if (on) ta.value = "";
+        });
+        card.appendChild(row); card.appendChild(ta);
+        return ta;
+      }
+      const entry = { id: "l" + Date.now() + Math.random().toString(36).slice(2, 7), date: date, time: time,
+                      ingredientChanges: "", methodChanges: "", notes: "", photos: [] };
+
+      // screen 1: when + the two changes
+      fresh("log this bake?");
+      const sub = document.createElement("div"); sub.className = "bb-form-sub"; sub.textContent = when; card.appendChild(sub);
+      const methodTa = changeField("method change", "methodChanges");
+      const ingTa = changeField("ingredient change", "ingredientChanges");
+      const a1 = document.createElement("div"); a1.className = "bb-modal-actions";
+      const next = document.createElement("button"); next.type = "button"; next.className = "bb-btn bb-btn-confirm"; next.textContent = "next";
+      a1.appendChild(next); card.appendChild(a1);
+      next.addEventListener("click", function () {
+        if (done) return;              // closed already: do nothing
+        entry.methodChanges = methodTa.disabled ? "" : methodTa.value.trim();
+        entry.ingredientChanges = ingTa.disabled ? "" : ingTa.value.trim();
+        askResults();
+      });
+
+      // screen 2: results now, or later
+      function askResults() {
+        fresh("ready to log results?");
+        const a2 = document.createElement("div"); a2.className = "bb-modal-actions";
+        const later = document.createElement("button"); later.type = "button"; later.className = "bb-btn bb-btn-cancel"; later.textContent = "later";
+        const yes = document.createElement("button"); yes.type = "button"; yes.className = "bb-btn bb-btn-confirm"; yes.textContent = "yes";
+        a2.appendChild(later); a2.appendChild(yes); card.appendChild(a2);
+        later.addEventListener("click", function () {
+          if (done) return;              // a second tap while it fades out must not save the bake again
+          entry.resultsPending = true;   // the log book dot stays until results are added
+          if (saveCookBake(entry)) { shut(); bbNotice("bake saved. add the results in the log book."); }
+        });
+        yes.addEventListener("click", writeResults);
+      }
+      // screen 3: the results box, ready to type
+      function writeResults() {
+        fresh("results");
+        const ta = document.createElement("textarea"); ta.className = "bb-form-input"; ta.rows = 4; ta.placeholder = "how did it turn out?";
+        ta.setAttribute("aria-label", "results");
+        card.appendChild(ta);
+        const a3 = document.createElement("div"); a3.className = "bb-modal-actions";
+        const save = document.createElement("button"); save.type = "button"; save.className = "bb-btn bb-btn-confirm"; save.textContent = "save bake";
+        a3.appendChild(save); card.appendChild(a3);
+        ta.focus();
+        save.addEventListener("click", function () {
+          if (done) return;              // a second tap while it fades out must not save the bake again
+          const v = ta.value.trim();
+          entry.notes = v;
+          if (!v) entry.resultsPending = true;   // left empty: same as "later", so the dot reminds the baker
+          if (saveCookBake(entry)) { shut(); bbNotice(v ? "bake saved to the log book" : "bake saved. add the results in the log book."); }
+        });
+      }
+
+      requestAnimationFrame(function () { modal.classList.add("show"); });
+    }
+
     let cookWakeLock = null;
     async function cookRequestWake() { try { if ("wakeLock" in navigator) cookWakeLock = await navigator.wakeLock.request("screen"); } catch (e) {} }
     function cookReleaseWake() { try { if (cookWakeLock) { cookWakeLock.release(); cookWakeLock = null; } } catch (e) {} }
 
     function openCookMode() {
+      if (window.bbLog) bbLog("make_it_started", { recipeId: recipe.id });
       // keep each step's note paired with its text (stepNotes is parallel to the UNfiltered steps)
       const stepData = [];
       (recipe.steps || []).forEach(function (s, i) {
-        if (s && String(s).trim()) stepData.push({ text: s, note: (recipe.stepNotes && recipe.stepNotes[i]) || "" });
+        if (s && String(s).trim()) stepData.push({ text: s, note: (recipe.stepNotes && recipe.stepNotes[i]) || "", orig: i });   // orig = its place in stepNotes
       });
       if (!stepData.length) { bbNotice("add a method step first to make this recipe."); return; }
       const steps = stepData.map(function (d) { return d.text; });
       let idx = 0;
+      // Was this visit a real bake? Leaving Make It offers the quick bake log only if the baker settled on
+      // MORE than half of this part's steps AND stayed more than 10 minutes. A step passed over while
+      // scrubbing the dots doesn't count; only a step that was shown and stayed does.
+      const cookOpenedAt = Date.now();
+      const cookPart = compIndex;   // the part being made (its notes are written here, even if the page redraws)
+      const visited = {};
+      let pageChanged = false;      // a note was saved here: redraw the recipe page underneath on the way out
 
       const el = document.createElement("div"); el.id = "cookMode";
 
@@ -1424,7 +1870,11 @@
       noteBtn.innerHTML = NOTE_ICON + '<span>note</span>';
       const noteBody = document.createElement("div"); noteBody.className = "cook-notebody";
       noteBtn.addEventListener("click", function () { noteWrap.classList.toggle("open"); });
-      noteWrap.appendChild(noteBtn); noteWrap.appendChild(noteBody);
+      // "+ note": write a note, then send it to this step or to the whole recipe
+      const addNoteBtn = document.createElement("button"); addNoteBtn.type = "button"; addNoteBtn.className = "cook-notebtn cook-addnote";
+      addNoteBtn.textContent = "+ note"; addNoteBtn.title = "add a note";
+      addNoteBtn.addEventListener("click", function () { openCookNote(); });
+      noteWrap.appendChild(noteBtn); noteWrap.appendChild(addNoteBtn); noteWrap.appendChild(noteBody);
 
       // ingredients — always shown in full below the step; the whole cook screen just scrolls
       const ings = document.createElement("div"); ings.className = "cook-ings";
@@ -1432,19 +1882,39 @@
       ihead.innerHTML = '<span class="lbl">ingredients</span>';
       ings.appendChild(ihead);
       const ibody = document.createElement("div"); ibody.className = "cook-ings-body";
+      // build rows tagged with their FILTERED index (matches the per-step map, which is computed on the
+      // same non-blank ingredient list). We show/hide these per step below.
+      const ingRows = []; let fIdx = 0;
       (recipe.ingredients || []).forEach(function (ing) {
         if (!ing || !(ing.name || "").trim()) return;
+        const myIdx = fIdx++;
         const row = document.createElement("div"); row.className = "cook-ing";
         const a = document.createElement("div"); a.className = "a"; a.textContent = ingAmountText(ing);
         const n = document.createElement("div"); n.className = "n"; n.textContent = ing.name;
         row.appendChild(a); row.appendChild(n); ibody.appendChild(row);
+        ingRows.push({ el: row, idx: myIdx });
       });
       ings.appendChild(ibody);
+      const ingLbl = ihead.querySelector(".lbl");
+      // show only the ingredients this step uses (from the cached AI map); no map → show all; a step that
+      // uses none (e.g. "preheat the oven") hides the panel entirely.
+      function showStepIngredients(stepIdx) {
+        const map = recipe.stepIngredients;
+        if (!map || !Array.isArray(map[stepIdx])) {
+          ings.style.display = ""; if (ingLbl) ingLbl.textContent = "ingredients";
+          ingRows.forEach(function (r) { r.el.style.display = ""; });
+          return;
+        }
+        const use = map[stepIdx];
+        if (!use.length) { ings.style.display = "none"; return; }
+        ings.style.display = ""; if (ingLbl) ingLbl.textContent = "for this step";
+        ingRows.forEach(function (r) { r.el.style.display = use.indexOf(r.idx) !== -1 ? "" : "none"; });
+      }
 
       el.appendChild(head); el.appendChild(stage);
-      if (!localStorage.getItem("bakebook.cookHintSeen")) {   // show the swipe hint only the very first time
+      if (!localStorage.getItem(obFlag("bakebook.cookHintSeen"))) {   // show the swipe hint only the very first time (per account)
         el.appendChild(hint);
-        try { localStorage.setItem("bakebook.cookHintSeen", "1"); } catch (e) {}
+        try { localStorage.setItem(obFlag("bakebook.cookHintSeen"), "1"); } catch (e) {}
       }
       el.appendChild(noteWrap); el.appendChild(dots); el.appendChild(ings);
       document.body.appendChild(el);
@@ -1456,10 +1926,12 @@
         prev.disabled = idx === 0; next.disabled = idx === steps.length - 1;
         hint.style.visibility = (steps.length > 1) ? "visible" : "hidden";
         const nt = stepData[idx].note;                        // show the note pill only when this step has one
-        noteWrap.style.display = nt ? "block" : "none";
+        noteBtn.style.display = nt ? "" : "none";             // ("+ note" is always there, so the row always shows)
         noteBody.textContent = nt || "";
         noteWrap.classList.remove("open");                    // start collapsed each time the step changes
         Array.prototype.forEach.call(dots.querySelectorAll(".cook-dot"), function (d, i) { d.classList.toggle("on", i === idx); });
+        showStepIngredients(idx);                             // narrow the ingredient list to this step
+        if (!scrubbing) visited[idx] = 1;                     // a step the baker landed on (not one slid past)
       }
       function go(delta) { const n = idx + delta; if (n >= 0 && n < steps.length) { idx = n; render(); } }
       prev.addEventListener("click", function () { go(-1); });
@@ -1501,6 +1973,7 @@
       function endScrub(e) {
         if (!scrubbing || (e && e.pointerId !== scrubPid)) return;
         scrubbing = false; scrubPid = null; dots.classList.remove("scrubbing"); scrubPrev.classList.add("hidden");
+        visited[idx] = 1;                                          // the step the scrub let go on counts
       }
       dots.addEventListener("pointerup", endScrub);
       dots.addEventListener("pointercancel", endScrub);
@@ -1534,16 +2007,74 @@
       el.addEventListener("pointerdown", function (e) { if (e.pointerType && e.pointerType !== "mouse") return; if (e.target.closest && e.target.closest(".cook-dots")) return; startSwipe(e.clientX, e.clientY); });
       el.addEventListener("pointerup", function (e) { if (e.pointerType && e.pointerType !== "mouse") return; endSwipe(e.clientX, e.clientY); });
 
+      // ---- "+ note": one box, then "add note to step" or "add note to recipe" ----
+      // The box starts with this step's note (if it has one), so "add note to step" edits it instead of
+      // losing it. "add note to recipe" adds only the new words to the recipe's notes, on a new line.
+      function openCookNote() {
+        const sd = stepData[idx], had = (sd.note || "").trim();
+        const modal = document.createElement("div"); modal.className = "bb-modal cook-pop cook-note-modal";
+        const card = document.createElement("div"); card.className = "bb-modal-card bb-form-card";
+        const x = document.createElement("button"); x.type = "button"; x.className = "bb-card-x"; x.innerHTML = "&times;"; x.setAttribute("aria-label", "close");
+        const h = document.createElement("div"); h.className = "bb-modal-title"; h.textContent = "add a note";
+        const sub = document.createElement("div"); sub.className = "bb-form-sub"; sub.textContent = "step " + (idx + 1) + " of " + steps.length;
+        const ta = document.createElement("textarea"); ta.className = "bb-form-input"; ta.rows = 4; ta.placeholder = "write your note";
+        ta.value = had;
+        const actions = document.createElement("div"); actions.className = "bb-actions-stack";
+        const toStep = document.createElement("button"); toStep.type = "button"; toStep.className = "bb-btn bb-btn-confirm"; toStep.textContent = "add note to step";
+        const toRecipe = document.createElement("button"); toRecipe.type = "button"; toRecipe.className = "bb-btn bb-btn-cancel"; toRecipe.textContent = "add note to recipe";
+        actions.appendChild(toStep); actions.appendChild(toRecipe);
+        card.appendChild(x); card.appendChild(h); card.appendChild(sub); card.appendChild(ta); card.appendChild(actions);
+        modal.appendChild(card); document.body.appendChild(modal);
+        requestAnimationFrame(function () { modal.classList.add("show"); ta.focus(); });
+        let done = false;
+        function shut() { if (done) return; done = true; modal.classList.remove("show"); document.removeEventListener("keydown", onNoteKey); setTimeout(function () { modal.remove(); }, 180); }
+        function onNoteKey(e) { if (e.key === "Escape") shut(); }
+        x.addEventListener("click", shut);
+        closeOnPopOutside(modal, shut);
+        document.addEventListener("keydown", onNoteKey);
+        toStep.addEventListener("click", function () {
+          if (done) return;                                        // a second tap while it fades out does nothing
+          const v = ta.value.trim();
+          if (v === had) { shut(); return; }                       // nothing changed
+          const c = recipe.components && recipe.components[cookPart]; if (!c) { shut(); return; }
+          if (!c.stepNotes) c.stepNotes = [];
+          while (c.stepNotes.length < sd.orig) c.stepNotes.push("");   // no gaps (a gap would save as null)
+          c.stepNotes[sd.orig] = v;
+          if (cookPart === compIndex) recipe.stepNotes = c.stepNotes;
+          sd.note = v; pageChanged = true;
+          markDirty(); saveNow();
+          shut(); render();
+        });
+        toRecipe.addEventListener("click", function () {
+          if (done) return;                                        // a second tap while it fades out must not add the note again
+          let v = ta.value.trim();
+          // the box opened holding this step's note: send only what was added after it
+          if (had && v.indexOf(had) === 0) v = v.slice(had.length).trim();
+          if (!v) { bbNotice("write a note first."); return; }
+          const cur = (recipe.notes || "").replace(/\s+$/, "");
+          recipe.notes = cur ? cur + "\n" + v : v;                 // on a new line, never over what's there
+          pageChanged = true;
+          markDirty(); saveNow();
+          shut(); bbNotice("note added to the recipe");
+        });
+      }
+
       function onKey(e) {
+        if (document.querySelector(".cook-note-modal")) return;   // typing a note: the keys belong to the note box
         if (e.key === "Escape") close();
         else if (e.key === "ArrowRight") go(1);
         else if (e.key === "ArrowLeft") go(-1);
       }
       function onVis() { if (document.visibilityState === "visible") cookRequestWake(); }   // re-arm wake lock after a tab switch
+      // every way back to the recipe comes here: the ×, Escape, and the back swipe / Android back (they tap the ×)
       function close() {
         document.removeEventListener("keydown", onKey);
         document.removeEventListener("visibilitychange", onVis);
         cookReleaseWake(); el.remove();
+        if (pageChanged && !editing) { const y = window.scrollY; buildPage(); window.scrollTo(0, y); }   // show the new notes
+        // a real bake (more than half the steps, more than 10 minutes): offer the quick bake log
+        const madeIt = Object.keys(visited).length > steps.length / 2 && (Date.now() - cookOpenedAt) > 10 * 60 * 1000;
+        if (madeIt) openBakeLogPopup();
       }
       exit.addEventListener("click", close);
       document.addEventListener("keydown", onKey);
@@ -1556,20 +2087,97 @@
       // edit action
       const topbar = document.createElement("div"); topbar.className = "topactions";
       const editBtn = document.createElement("button"); editBtn.className = "editbtn"; editBtn.type = "button"; editBtn.textContent = "edit";
-      editBtn.addEventListener("click", function () { editing = true; buildPage(); });
+      editBtn.addEventListener("click", function () { editing = true; changedElsewhere = false; buildPage(); });
       topbar.appendChild(editBtn); app.appendChild(topbar);
+
+      // spin off a new variation of a master (shared by the view "+ new" link and the edit "create variation")
+      function spawnVariation(masterRec, name) {
+        masterRec = masterRec || recipe;
+        const now = Date.now();
+        const variation = {
+          id: "r" + now + Math.random().toString(36).slice(2, 7),
+          parentId: masterRec.id, name: (name && name.trim()) || (masterRec.name + " variation"),
+          description: masterRec.description || "", category: masterRec.category || "", notes: masterRec.notes || "",
+          components: JSON.parse(JSON.stringify(masterRec.components || [])),
+          ingredients: [], steps: [], stepNotes: [], photos: [], logs: [],
+          createdAt: now, updatedAt: now
+        };
+        (variation.components || []).forEach(function (c) {
+          (c.ingredients || []).forEach(function (x) { variation.ingredients.push(x); });
+          (c.steps || []).forEach(function (x) { variation.steps.push(x); });
+          (c.stepNotes || []).forEach(function (x) { variation.stepNotes.push(x); });
+        });
+        saveThen(function () {   // save any unsaved edits first (asks first if it changed on another device mid-edit)
+          recipes = loadRecipes();   // the freshest list: this page's copy of the other recipes may be out of date
+          recipes.push(variation);
+          try { localStorage.setItem("bakebook.recipes", JSON.stringify(recipes)); } catch (e) {}
+          if (window.bbLog) bbLog("recipe_created", { recipeId: variation.id, kind: "variation" });
+          dirty = false;
+          location.href = "recipe.html?id=" + encodeURIComponent(variation.id);
+        });
+      }
+
+      // "↩ a version of X" line at the very top — only on a variation (replaces the old banner)
+      if (recipe.parentId) {
+        const pm = recipes.find(function (r) { return r.id === recipe.parentId; });
+        const vm = document.createElement("div"); vm.className = "vmaster";
+        vm.appendChild(document.createTextNode("↩ a version of "));
+        const ml = document.createElement("a"); ml.textContent = pm ? pm.name : "a recipe";
+        if (pm) ml.addEventListener("click", function () { location.href = "recipe.html?id=" + encodeURIComponent(pm.id); });
+        vm.appendChild(ml); app.appendChild(vm);
+      }
+
+      // eyebrow (category · teal mono, like the brand card) — skipped when there's no real category
+      const cat = (recipe.category || "").trim();
+      if (cat && cat.toLowerCase() !== "uncategorized") {
+        const eb = document.createElement("div"); eb.className = "reyebrow"; eb.textContent = cat; app.appendChild(eb);
+      }
 
       // title
       const h = document.createElement("h1"); h.className = "rtitle"; h.textContent = recipe.name || "untitled recipe"; app.appendChild(h);
 
-      // variation banner (if this is a variation of another recipe)
-      if (recipe.parentId) {
-        const master = recipes.find(function (r) { return r.id === recipe.parentId; });
-        const banner = document.createElement("div"); banner.className = "var-banner";
-        banner.textContent = "variation of " + (master ? master.name : "a recipe");
-        if (master) banner.addEventListener("click", function () { location.href = "recipe.html?id=" + encodeURIComponent(master.id); });
-        app.appendChild(banner);
+      // time · makes — key stats, mono (only when provided)
+      const metaBits = [];
+      if ((recipe.time || "").trim()) metaBits.push(recipe.time.trim());
+      if ((recipe.servings || "").trim()) {
+        const sv = recipe.servings.trim();
+        // a bare number is a serving count (the serves wheel); older free text ("1 loaf") still reads as "makes"
+        metaBits.push(/^(makes|serves|yield|for )/i.test(sv) ? sv : (/^\d+$/.test(sv) ? "serves " + sv : "makes " + sv));
       }
+      if (metaBits.length) {
+        const mr = document.createElement("div"); mr.className = "rmeta"; mr.textContent = metaBits.join("  ·  "); app.appendChild(mr);
+      }
+
+      // versions — sleek inline links to this recipe's OTHER versions (master + siblings, never itself).
+      // Shown only when other versions exist; "+ new" spins off another variation of the branch master.
+      (function () {
+        const branchId = recipe.parentId || recipe.id;
+        const masterRec = recipes.find(function (r) { return r.id === branchId; });
+        const fam = [];
+        if (masterRec && masterRec.id !== recipe.id) fam.push(masterRec);
+        recipes.forEach(function (r) { if (r.parentId === branchId && r.id !== recipe.id) fam.push(r); });
+        if (!fam.length) return;   // no other versions yet → nothing to show (create the first via edit mode)
+        const vl = document.createElement("div"); vl.className = "vlinks";
+        const lbl = document.createElement("button"); lbl.type = "button"; lbl.className = "vlbl";
+        lbl.appendChild(document.createTextNode("versions"));
+        const caret = document.createElement("span"); caret.className = "vcaret"; caret.textContent = "▾"; lbl.appendChild(caret);
+        lbl.addEventListener("click", function () { vl.classList.toggle("collapsed"); });
+        vl.appendChild(lbl);
+        const list = document.createElement("div"); list.className = "vlist";
+        fam.forEach(function (r) {
+          const item = document.createElement("span"); item.className = "vitem";   // name + trailing dot = one wrap unit
+          const a = document.createElement("a"); a.textContent = r.name || "untitled";
+          a.addEventListener("click", function () { location.href = "recipe.html?id=" + encodeURIComponent(r.id); });
+          item.appendChild(a);
+          const s = document.createElement("span"); s.className = "vsep"; s.textContent = "·"; item.appendChild(s);
+          list.appendChild(item);
+        });
+        const plus = document.createElement("a"); plus.className = "vplus"; plus.textContent = "+ new";
+        plus.addEventListener("click", function () { spawnVariation(masterRec || recipe); });
+        list.appendChild(plus);
+        vl.appendChild(list);
+        app.appendChild(vl);
+      })();
 
       // description, framed by rules (like the mockup)
       if (recipe.description) {
@@ -1617,6 +2225,12 @@
         app.appendChild(mwrap);
       }
 
+      // notes: the recipe's own notes (not tied to a step), shown when there are any
+      if (recipe.notes && String(recipe.notes).trim()) {
+        const nh = document.createElement("h2"); nh.className = "rsection"; nh.textContent = "notes"; app.appendChild(nh);
+        const np = document.createElement("p"); np.className = "rnotes"; np.textContent = recipe.notes; app.appendChild(np);
+      }
+
       // photos (kept at the bottom; always shown so you can add straight from the view)
       const pt = document.createElement("h2"); pt.className = "rsection"; pt.textContent = "photos"; app.appendChild(pt);
       const g = document.createElement("div"); g.className = "gallery";
@@ -1635,24 +2249,106 @@
       g.appendChild(addTile);
       app.appendChild(g);
 
-      // variations (if this master has any)
-      if (!recipe.parentId) {
-        const vars = recipes.filter(function (r) { return r.parentId === recipe.id; });
-        if (vars.length) {
-          const vt = document.createElement("h2"); vt.className = "rsection"; vt.textContent = "variations"; app.appendChild(vt);
-          vars.forEach(function (v) {
-            const a = document.createElement("a"); a.className = "recipe-card"; a.href = "recipe.html?id=" + encodeURIComponent(v.id);
-            const h3 = document.createElement("h3"); h3.textContent = v.name; a.appendChild(h3); app.appendChild(a);
-          });
-        }
-      }
+      // (variations now live in the "versions" links up top, right under the recipe meta)
 
       // actions
       const logBtn = document.createElement("button"); logBtn.className = "log"; logBtn.type = "button";
       logBtn.innerHTML = '<img src="logbook-icon.svg" alt="" style="height:1.15em;margin-right:.45em;vertical-align:-0.18em"> view log book';
       logBtn.addEventListener("click", function () { location.href = "logbook.html?id=" + encodeURIComponent(recipe.id); });
+      addPendingDot(logBtn);
       app.appendChild(logBtn);
+
+      // ---- share recipe (public link + native share sheet) ----
+      if (!recipe.parentId || true) {   // sharable from any recipe view
+        const shareBtn = document.createElement("button"); shareBtn.className = "log"; shareBtn.type = "button";
+        shareBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="margin-right:.45em;vertical-align:-0.18em" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg> share recipe';
+        shareBtn.addEventListener("click", function () { shareRecipe(shareBtn); });
+        app.appendChild(shareBtn);
+      }
       // butter now lives in the floating helper button (ensureButterFab), not inline here
+    }
+
+    // ---------- SHARE: publish a public snapshot of this recipe + open the OS share sheet ----------
+    // The snapshot is a read-only copy (name/desc/ingredients/method/photo URLs) written to a public
+    // `shares/{id}` doc. Anyone with the link can VIEW it; only signed-in users can ADD it to their own
+    // bakebook (the gate sits at "add", never at "view").
+    function genShareId() {
+      const chars = "abcdefghijkmnpqrstuvwxyz23456789"; let s = "";   // no look-alike 0/o/1/l
+      const a = new Uint8Array(16);
+      if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(a); else for (let i = 0; i < 16; i++) a[i] = Math.floor(Math.random() * 256);
+      for (let i = 0; i < 16; i++) s += chars[a[i] % chars.length];
+      return s;
+    }
+    function cleanIngForShare(ing) {
+      const o = { name: String((ing && ing.name) || "") };
+      if (ing && ing.amount != null && ing.amount !== "") o.amount = String(ing.amount);
+      if (ing && ing.unit) o.unit = String(ing.unit);
+      if (ing && ing.note) o.note = String(ing.note);
+      return o;
+    }
+    function buildShareSnapshot() {
+      const asComp = function (c) {
+        return {
+          name: String((c && c.name) || ""),
+          ingredients: ((c && c.ingredients) || []).map(cleanIngForShare),
+          steps: ((c && c.steps) || []).map(function (s) { return String(s || ""); }),
+          stepNotes: ((c && c.stepNotes) || []).map(function (n) { return String(n || ""); })
+        };
+      };
+      const comps = (recipe.components && recipe.components.length)
+        ? recipe.components.map(asComp)
+        : [asComp({ ingredients: recipe.ingredients, steps: recipe.steps, stepNotes: recipe.stepNotes })];
+      const photos = (recipe.photos || []).filter(function (p) { return typeof p === "string" && /^https?:/i.test(p); }).slice(0, 8);
+      const u = firebase.auth().currentUser;
+      return {
+        ownerUid: u ? u.uid : "",
+        ownerName: (u && (u.displayName || ((u.email || "").split("@")[0]))) || "a baker",
+        name: recipe.name || "untitled recipe",
+        description: recipe.description || "",
+        category: recipe.category || "",
+        time: recipe.time || "",
+        servings: recipe.servings || "",
+        components: comps,
+        photos: photos,
+        v: 1,
+        createdAt: Date.now()
+      };
+    }
+    // The public share link must ALWAYS point at the hosted site. Inside the installed app the page
+    // origin is "capacitor://localhost", so location.origin would produce a dead link for recipients.
+    const SHARE_BASE = "https://bakebook.co";
+    function shareRecipe(btn) {
+      const u = firebase.auth().currentUser;
+      if (!u) { if (window.bbNotice) bbNotice("please sign in to share"); return; }
+      // give this recipe a STABLE share id (reused on re-share so the link never changes), persist it
+      let sid = recipe.shareId;
+      if (!sid) { sid = genShareId(); recipe.shareId = sid; try { saveNow(); } catch (e) {} }
+      const url = SHARE_BASE + "/share.html?s=" + sid;
+      const snap = buildShareSnapshot();
+      // Write the share doc in the BACKGROUND — do NOT await it before opening the share sheet.
+      // navigator.share() only works while the tap's "user activation" is still live; an async
+      // Firestore round-trip burns that window, so the sheet silently fails (esp. in the iOS
+      // WKWebView). Firing the sheet synchronously here keeps it working on web AND in the app.
+      firebase.firestore().collection("shares").doc(sid).set(snap).catch(function (e) {
+        console.error("bakebook: share write failed —", e);
+      });
+      if (window.bbLog) bbLog("recipe_shared", { recipeId: recipe.id });
+      const data = { title: recipe.name || "a bakebook recipe", text: "“" + (recipe.name || "a recipe") + "” — shared from bakebook", url: url };
+      function copyLink() {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url)
+            .then(function () { if (window.bbNotice) bbNotice("link copied — paste it in a message or email"); })
+            .catch(function () { if (window.bbNotice) bbNotice(url); });
+        } else if (window.bbNotice) { bbNotice(url); }
+      }
+      if (navigator.share) {
+        navigator.share(data).catch(function (err) {
+          // dismissing the sheet is fine (AbortError); any real failure → fall back to copying the link
+          if (err && err.name !== "AbortError") copyLink();
+        });
+      } else {
+        copyLink();
+      }
     }
 
     function plainAmount(a, unit) { return fmtNum(a) + (unit && unit !== 'each' ? " " + unit : ""); }
@@ -1782,6 +2478,16 @@
       title.addEventListener("input", function () { recipe.name = title.value; markDirty(); });
       app.appendChild(title);
 
+      // ---- time · makes (optional) — compact meta line right under the name ----
+      // tap-to-add fields that open a scrolling sheet (bakebook-meta.js); they fire "input" on a pick
+      const tvrow = document.createElement("div"); tvrow.className = "tvrow";
+      const tf = bbTimeField(); tf.value = recipe.time || "";
+      tf.addEventListener("input", function () { recipe.time = tf.value; markDirty(); });
+      const sf = bbServesField(); sf.value = recipe.servings || "";
+      sf.addEventListener("input", function () { recipe.servings = sf.value; markDirty(); });
+      tvrow.appendChild(tf); tvrow.appendChild(sf);
+      app.appendChild(tvrow);
+
       // ---- description ----
       const desc = document.createElement("textarea");
       desc.className = "desc"; desc.rows = 2; desc.placeholder = "description...";
@@ -1851,8 +2557,7 @@
         const banner = document.createElement("div"); banner.className = "var-banner";
         banner.textContent = "variation of " + (master ? master.name : "a recipe");
         if (master) banner.addEventListener("click", function () {
-          if (dirty) saveNow();
-          location.href = "recipe.html?id=" + encodeURIComponent(master.id);
+          saveThen(function () { location.href = "recipe.html?id=" + encodeURIComponent(master.id); });
         });
         app.appendChild(banner);
 
@@ -1892,7 +2597,10 @@
           variations.forEach(function (v) {
             const link = document.createElement("a"); link.className = "recipe-card";
             link.href = "recipe.html?id=" + encodeURIComponent(v.id);
-            link.addEventListener("click", function () { if (dirty) saveNow(); });
+            link.addEventListener("click", function (e) {
+              if (savesOnHold() && dirty) { e.preventDefault(); saveThen(function () { location.href = link.href; }); return; }   // ask first, then go
+              if (dirty) saveNow();
+            });
             const h3 = document.createElement("h3"); h3.textContent = v.name; link.appendChild(h3);
             const meta = document.createElement("p"); meta.className = "meta";
             meta.textContent = (v.ingredients ? v.ingredients.length : 0) + " ingredients  ·  " + (v.logs ? v.logs.length : 0) + " bakes";
@@ -1918,6 +2626,7 @@
             name: name,
             description: recipe.description || "",
             category: recipe.category || "",
+            notes: recipe.notes || "",
             components: JSON.parse(JSON.stringify(recipe.components || [])),   // deep copy so edits don't touch the master
             ingredients: [], steps: [], stepNotes: [],   // flattened mirror, filled just below
             photos: [],
@@ -1930,11 +2639,14 @@
             (c.steps || []).forEach(function (x) { variation.steps.push(x); });
             (c.stepNotes || []).forEach(function (x) { variation.stepNotes.push(x); });
           });
-          if (dirty) saveNow();          // save any pending master edits first
-          recipes.push(variation);
-          try { localStorage.setItem("bakebook.recipes", JSON.stringify(recipes)); } catch (e) {}
-          dirty = false;
-          location.href = "recipe.html?id=" + encodeURIComponent(variation.id);   // open the new variation
+          saveThen(function () {         // save any pending master edits first (asks first if it changed on another device)
+            recipes = loadRecipes();       // the freshest list: this page's copy of the other recipes may be out of date
+            recipes.push(variation);
+            try { localStorage.setItem("bakebook.recipes", JSON.stringify(recipes)); } catch (e) {}
+            if (window.bbLog) bbLog("recipe_created", { recipeId: variation.id, kind: "variation" });
+            dirty = false;
+            location.href = "recipe.html?id=" + encodeURIComponent(variation.id);   // open the new variation
+          });
         }
 
         addVar.addEventListener("click", function () {
@@ -1982,6 +2694,15 @@
       });
       app.appendChild(addStep);
 
+      // ---- notes (the recipe's own notes, below the method) ----
+      const nTitle = document.createElement("div");
+      nTitle.className = "section-title"; nTitle.textContent = "notes"; app.appendChild(nTitle);
+      const notesBox = document.createElement("textarea");
+      notesBox.className = "notes-edit"; notesBox.rows = 3; notesBox.placeholder = "notes about this recipe...";
+      notesBox.value = recipe.notes || "";
+      notesBox.addEventListener("input", function () { recipe.notes = notesBox.value; markDirty(); });
+      app.appendChild(notesBox);
+
       // ---- photos ----
       const pTitle = document.createElement("div");
       pTitle.className = "section-title"; pTitle.textContent = "photos"; app.appendChild(pTitle);
@@ -2026,8 +2747,10 @@
           return;
         }
         const y = window.scrollY;                 // remember where the baker was editing…
-        saveNow(); editing = false; buildPage();
-        window.scrollTo(0, y);                     // …and stay there, so the fixed "saved ✓" shows at the TOP OF THE SCREEN instead of yanking the page to the top
+        saveEndingEdit(function () {              // (asks "keep mine / load the other version" first if it changed elsewhere)
+          editing = false; changedElsewhere = false; buildPage();
+          window.scrollTo(0, y);                   // …and stay there, so the fixed "saved ✓" shows at the TOP OF THE SCREEN instead of yanking the page to the top
+        });
       });
       app.appendChild(saveBtn);
 
@@ -2036,9 +2759,10 @@
       logBtn.className = "log";
       logBtn.innerHTML = '<img src="logbook-icon.svg" alt="" style="height:1.15em;margin-right:.45em;vertical-align:-0.18em"> view log book';
       logBtn.addEventListener("click", function () {
-        saveNow();   // save first so the log book sees the latest recipe
-        location.href = "logbook.html?id=" + encodeURIComponent(recipe.id);
+        // save first so the log book sees the latest recipe (asks first if it changed elsewhere)
+        saveEndingEdit(function () { location.href = "logbook.html?id=" + encodeURIComponent(recipe.id); });
       });
+      addPendingDot(logBtn);
       app.appendChild(logBtn);
 
       // butter now lives in the floating helper button (ensureButterFab), not inline here
@@ -2055,14 +2779,24 @@
           okLabel: "delete", cancelLabel: "keep", danger: true
         }).then(function (ok) {
           if (!ok) return;
-          // remove this recipe AND any variations that belong to it (no orphans)
+          // remove this recipe AND any variations that belong to it (no orphans). Start from the freshest
+          // list, so an out-of-date copy of some other recipe is never written back.
+          recipes = loadRecipes();
           const removed = recipes.filter(function (r) { return r.id === recipe.id || r.parentId === recipe.id; });
           // stash the removed recipes so the home screen can offer a few-second "undo" after we navigate there
           try { sessionStorage.setItem("bakebook.undoDelete", JSON.stringify(removed)); } catch (e) {}
           recipes = recipes.filter(function (r) { return r.id !== recipe.id && r.parentId !== recipe.id; });
           try { localStorage.setItem("bakebook.recipes", JSON.stringify(recipes)); } catch (e) {}
           dirty = false;   // don't warn about "unsaved changes" — we're deleting on purpose
-          location.href = "index.html";
+          // Push the delete to the cloud BEFORE leaving, the same way the home page does. Otherwise the
+          // home page can load the cloud copy and bring the recipe back. Wait at most 2.5 seconds: offline,
+          // we still go home right away and the tombstone (the "deleted here" note the store keeps in
+          // localStorage) keeps it deleted until the next sync. A failed push must never block going home.
+          const goHome = function () { location.href = "index.html"; };
+          if (!window.bakebookFlush) { goHome(); return; }   // signed out: nothing to push
+          let flushed;
+          try { flushed = bakebookFlush(); } catch (e) { goHome(); return; }
+          Promise.race([Promise.resolve(flushed), new Promise(function (r) { setTimeout(r, 2500); })]).then(goHome, goHome);
         });
       });
       app.appendChild(delBtn);
@@ -2185,15 +2919,15 @@
         // edit fields (hidden until a double-tap)
         const edit = document.createElement("div"); edit.className = "rowedit hidden";
         const amount = document.createElement("input"); amount.className = "amount"; amount.inputMode = "decimal";
-        amount.value = ing.amount || ""; amount.placeholder = "amt";
+        amount.value = ing.amount || ""; amount.placeholder = "amount";
         amount.addEventListener("input", function () { ing.amount = amount.value; markDirty(); });
-        const unit = makeSelect(UNITS, ing.unit, function (v) { ing.unit = v; markDirty(); }, { className: "unit" });
+        const unit = bbUnitPicker(ing.unit, function (v) { ing.unit = v; markDirty(); }, { className: "unit" });
         const name = document.createElement("input"); name.className = "iname"; name.value = ing.name || ""; name.placeholder = "ingredient";
         name.addEventListener("input", function () { ing.name = name.value; markDirty(); });
-        edit.appendChild(amount); edit.appendChild(unit); edit.appendChild(name);
+        edit.appendChild(name); edit.appendChild(unit); edit.appendChild(amount);   // same order as the new-recipe form: ingredient > unit > amount
 
         let stopOutside = null;
-        function enterEdit() { disp.classList.add("hidden"); edit.classList.remove("hidden"); amount.focus(); stopOutside = closeEditOnOutsideTap(row, exitEdit); }
+        function enterEdit() { disp.classList.add("hidden"); edit.classList.remove("hidden"); name.focus(); stopOutside = closeEditOnOutsideTap(row, exitEdit); }
         function exitEdit() { if (stopOutside) { stopOutside(); stopOutside = null; } fillDisp(); edit.classList.add("hidden"); disp.classList.remove("hidden"); }
         onActivateEdit(disp, enterEdit);
         edit.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); exitEdit(); } });
@@ -2314,13 +3048,27 @@
           recipe.components = [{ name: "", ingredients: recipe.ingredients || [], steps: recipe.steps || [], stepNotes: recipe.stepNotes || [] }];
         }
         setComp(0);
+        pageBase = storedShape(recipe);   // the starting point: a later save compares against this
         buildPage();
       }
     }
-    // wait for the cloud copy before drawing (so a fresh device shows your recipes)
-    if (window.bakebookWhenReady) bakebookWhenReady(startRecipe); else startRecipe();
+    // Draw IMMEDIATELY from the local cache when we already have this recipe — no white wait when
+    // hopping between versions or reopening a recipe. Only fall back to waiting for the cloud when the
+    // recipe isn't cached yet (fresh device / deep link). Either way, refresh once the cloud is ready.
+    const haveCached = loadRecipes().some(function (r) { return r && r.id === id; });
+    if (haveCached) startRecipe();
+    if (window.bakebookWhenReady) bakebookWhenReady(function () { if (!editing) startRecipe(); });
+    else if (!haveCached) startRecipe();
     // live updates from other devices — but never while the user is mid-edit
     if (window.bakebookOnChange) bakebookOnChange(function () { if (!editing) startRecipe(); });
+    // ...and say so when it's THIS recipe that changed on another device (never for this device's own
+    // saves). Viewing: the page has already refreshed above. Editing: nothing is rebuilt under your
+    // hands; you're told now, and asked which version to keep when you save.
+    if (window.bakebookOnRemoteChange) bakebookOnRemoteChange(function (ids) {
+      if (!recipe || ids.indexOf(id) === -1) return;
+      if (editing) { changedElsewhere = true; bbNotice("this recipe just changed on another device"); }
+      else bbNotice("updated on another device");
+    });
 
     // configure bakebook+ billing for this signed-in user so the paywall can load plans on THIS page too
     // (e.g. when opened from butter's upgrade link on a recipe) — same as the home page does.

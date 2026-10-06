@@ -37,14 +37,18 @@
   window.bbUnlockScroll = unlockScroll;
 
   // ---------------- config (fill in once RevenueCat is set up) ----------------
-  var REVENUECAT_IOS_KEY  = "YOUR_REVENUECAT_PUBLIC_IOS_KEY";  // RevenueCat public (publishable) app-specific key — placeholder in this public mirror
+  var REVENUECAT_IOS_KEY     = "YOUR_REVENUECAT_PUBLIC_IOS_KEY";  // RevenueCat public (publishable) app-specific key, placeholder in this public mirror
+  var REVENUECAT_ANDROID_KEY = "YOUR_REVENUECAT_PUBLIC_ANDROID_KEY";                                  // RevenueCat public key for Google Play ("goog_..."); empty = Android paywall says "coming soon"
   var PREMIUM_ENTITLEMENT = "premium";                 // the entitlement identifier you create in RevenueCat
   var PRODUCTS = { yearly: "bakebook_plus_yearly", monthly: "bakebook_plus_monthly" };
 
   // ---------------- native plugin plumbing (guarded) ----------------
   function plugin()  { return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Purchases) || null; }
   function isNative(){ return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
-  function configured(){ return isNative() && !!plugin() && !!REVENUECAT_IOS_KEY; }
+  function platform(){ try { return window.Capacitor.getPlatform(); } catch (e) { return "web"; } }
+  // The key for the store this build came from. Each store has its own RevenueCat key.
+  function storeKey(){ return platform() === "android" ? REVENUECAT_ANDROID_KEY : REVENUECAT_IOS_KEY; }
+  function configured(){ return isNative() && !!plugin() && !!storeKey(); }
 
   var ready = false;
   // Why did the paywall come back empty? Captured here (human-readable) for on-device debugging —
@@ -61,7 +65,7 @@
     if (!configured()) { warnDiag("billing not available (not native, or RevenueCat plugin/key missing)"); return Promise.resolve(false); }
     if (ready) return Promise.resolve(true);
     var p;
-    try { p = plugin().configure({ apiKey: REVENUECAT_IOS_KEY, appUserID: uid || undefined }); }
+    try { p = plugin().configure({ apiKey: storeKey(), appUserID: uid || undefined }); }
     catch (e) { ready = false; warnDiag("RevenueCat configure() threw: " + ((e && (e.message || e.code)) || e), e); return Promise.resolve(false); }
     // configure() returned void/non-promise (older/newer plugin) → treat as configured; getOfferings will reveal any real problem.
     if (!p || typeof p.then !== "function") { ready = true; return Promise.resolve(true); }
@@ -199,7 +203,9 @@
       return { close: close };
     }
 
-    noteEl.textContent = "auto-renewing subscription billed through your apple id. cancel anytime in settings.";
+    noteEl.textContent = platform() === "android"
+      ? "auto-renewing subscription billed through google play. cancel anytime in the play store."
+      : "auto-renewing subscription billed through your apple id. cancel anytime in settings.";
     plansEl.innerHTML = '<p class="bbpw-msg">loading plans…</p>';
 
     function done(premium) { if (premium) { onPremiumUnlocked(); close(); } }
@@ -214,12 +220,14 @@
       }
       plansEl.innerHTML = "";
       // show yearly first (best value), then monthly
+      // Google names a product "id:plan" (e.g. bakebook_plus_yearly:yearly); keep the part before the colon.
+      function productId(pkg) { return ((pkg.product && pkg.product.identifier) || "").split(":")[0]; }
       packages.sort(function (a, b) {
-        var pa = a.product && a.product.identifier, pb = b.product && b.product.identifier;
+        var pa = productId(a), pb = productId(b);
         return (pa === PRODUCTS.yearly ? -1 : 0) - (pb === PRODUCTS.yearly ? -1 : 0);
       });
       packages.forEach(function (pkg) {
-        var pid = pkg.product && pkg.product.identifier;
+        var pid = productId(pkg);
         var meta = PLAN_META[pid] || { name: (pkg.product && pkg.product.title) || "bakebook+", best: false, meta: "" };
         var btn = document.createElement("button"); btn.className = "bbpw-plan" + (meta.best ? " best" : "");
         btn.innerHTML =
@@ -227,14 +235,14 @@
           '<br><span class="meta">' + (meta.meta || "") + '</span></span>' +
           '<span class="price">' + ((pkg.product && pkg.product.priceString) || "") + '</span>';
         btn.addEventListener("click", function () {
-          btn.disabled = true; noteEl.textContent = "opening apple’s purchase sheet…";
+          btn.disabled = true; noteEl.textContent = platform() === "android" ? "opening google play’s purchase sheet…" : "opening apple’s purchase sheet…";
           bakebookBilling.purchase(pkg)
             .then(done)
             .catch(function (err) {
               btn.disabled = false;
               // a user cancel isn't an error worth shouting about
               var msg = (err && err.message) || "";
-              noteEl.textContent = /cancel/i.test(msg) ? "auto-renewing subscription billed through your apple id. cancel anytime." : "couldn’t complete the purchase — please try again.";
+              noteEl.textContent = /cancel/i.test(msg) ? (platform() === "android" ? "auto-renewing subscription billed through google play. cancel anytime." : "auto-renewing subscription billed through your apple id. cancel anytime.") : "couldn’t complete the purchase — please try again.";
             });
         });
         plansEl.appendChild(btn);

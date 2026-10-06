@@ -9,6 +9,7 @@
 // a free general-purpose assistant, or spend your credits without limit.
 
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -43,9 +44,8 @@ const PREMIUM_SONNET_LIMIT = 20;          // bakebook+ "quick mode": a paid memb
                                           // day isn't cut short. Tune this one number anytime.
 const PREMIUM_QUICK_MODEL = "claude-haiku-4-5";  // the model butter uses once a paid member is in "quick mode"
 
-// Any call through this proxy may only use these models (blocks pricey Opus abuse).
-const ALLOWED_MODELS = ["claude-haiku-4-5", "claude-sonnet-5"];
-const IMPORT_MAX_TOKENS = 3000;           // hard ceiling for non-butter calls (recipe import)
+// Recipe import's model, length, tools and daily ceilings live in import-guard.js.
+const { buildImportBody, importQuotaVerdict, MSG_LIMIT, MSG_BANNED } = require("./import-guard");
 
 // A cheap, fast model used only to screen each butter message for abuse.
 const MODERATION_MODEL = "claude-haiku-4-5";
@@ -265,6 +265,17 @@ const BUTTER_PERSONA =
   "below exactly what's possible in THIS view. NEVER offer an action you have no tool for, and never say you've " +
   "saved or changed a recipe unless you called the matching tool in that same turn. For questions, ideas, or " +
   "'what if' discussion, just answer in text.\n\n" +
+  "Handle the WHOLE request, not just the easy part or the part you happen to have a tool for. A single " +
+  "message often bundles several asks, or mixes something you CAN do in this view with something you can't " +
+  "(add/remove a photo, delete a recipe, set a timer, rename a category, add a component, make a variation, " +
+  "change a setting, save more than one recipe at once, etc.). ALWAYS, in the SAME reply: (1) DO every part " +
+  "you can do here right now (call the tool); (2) then clearly tell the baker what you just did, name each " +
+  "part you could NOT do from this view, and give the exact steps for them to finish it themselves — which " +
+  "button to tap, or to open the recipe first, or to send the next one. NEVER silently complete only part of " +
+  "a request, NEVER attempt a tool you can't actually complete, and NEVER go silent. Read the conversation so " +
+  "you don't repeat something you already did. Example: asked in the home chat to 'save a cherry pie with a " +
+  "vegan variation', save the pie now, then say variations are made from inside a recipe — open the pie and " +
+  "ask for a vegan variation, or tap '+ add variation'. ALWAYS respond in words — never end a turn with nothing.\n\n" +
   "You ONLY help with baking, cooking, and food science. If asked about anything unrelated (coding, math, " +
   "general knowledge, personal advice, etc.), politely decline in one short sentence — explain that butter is " +
   "designed for food science and recipe development — and invite them back to a baking question. Do not answer " +
@@ -367,6 +378,23 @@ async function continuationAllows(uid) {
   return count < DAILY_CONT_LIMIT;
 }
 
+// Count one import call against today's ceiling, or refuse it. Read, check and write happen in one
+// transaction so two calls at once can't both slip under the limit. Kept in its own `importUsage`
+// field so it never touches butter's `usage` counts.
+async function takeImportQuota(uid) {
+  const ref = admin.firestore().collection("users").doc(uid);
+  const today = todayStr();
+  const verdict = await admin.firestore().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    // the decision itself lives in import-guard.js so a test can check it without a database
+    const v = importQuotaVerdict(snap.exists ? snap.data() : {}, today);
+    if (v.verdict === "ok") tx.set(ref, { importUsage: v.importUsage }, { merge: true });
+    return v.verdict;
+  });
+  if (verdict === "banned") throw new HttpsError("permission-denied", MSG_BANNED);
+  if (verdict === "limit") throw new HttpsError("resource-exhausted", MSG_LIMIT);
+}
+
 exports.claude = onCall(
   { secrets: [ANTHROPIC_API_KEY], cors: true },
   async (request) => {
@@ -377,9 +405,36 @@ exports.claude = onCall(
     const uid = request.auth.uid;
     const data = request.data || {};
 
+    // 1b) a user flagged a butter answer as bad. Record it for review and return — this never calls
+    //     Claude and never touches the daily quota. Two shapes: a NEW flag (returns its id), or an
+    //     UPDATE that attaches the reason the user optionally picked after flagging (by flagId).
+    if (data.kind === "flag") {
+      const db = admin.firestore();
+      const ALLOWED_REASONS = ["wrong", "unhelpful", "off-topic"];
+      const reason = ALLOWED_REASONS.indexOf(data.reason) !== -1 ? data.reason : null;
+      if (typeof data.flagId === "string" && data.flagId) {
+        // attach/update the reason on an existing flag — only if it's this user's flag
+        const ref = db.collection("butterFlags").doc(data.flagId);
+        const snap = await ref.get();
+        if (snap.exists && snap.data().uid === uid) {
+          await ref.set({ reason: reason, reasonAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        }
+        return { ok: true, flagId: data.flagId };
+      }
+      const flag = {
+        uid: uid,
+        text: (typeof data.text === "string" ? data.text : "").slice(0, 4000),
+        reason: reason,
+        recipeId: (typeof data.recipeId === "string" && data.recipeId) ? data.recipeId : null,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      const ref = await db.collection("butterFlags").add(flag);
+      return { ok: true, flagId: ref.id };
+    }
+
     // 2) build the Anthropic request. Two paths:
     //    - "butter" chat: the server owns model/tokens/personality + enforces the daily limit.
-    //    - anything else (recipe import): accept the client's request but clamp model + tokens.
+    //    - anything else (recipe import): the server builds the whole request from the photos or link.
     let body;
     let butterPremium = false;   // set in the butter branch below; used to report the right daily limit to the client
     let butterQuickMode = false; // paid member past PREMIUM_SONNET_LIMIT today → butter answers on Haiku ("quick mode")
@@ -477,7 +532,11 @@ exports.claude = onCall(
           "book: if (and only if) they clearly ask you to save/make/create a recipe, call create_recipe with the " +
           "COMPLETE recipe. If it has distinct parts (e.g. a cake and a frosting), put EACH part in the `components` " +
           "array (its own name + ingredients + steps) rather than one flat list. The baker confirms before it's " +
-          "saved. You CANNOT edit an existing recipe from here — if they want that, tell them to open the recipe first.";
+          "saved. Limits of THIS view — use them to tell the baker how to finish anything you can't do here: " +
+          "create_recipe saves ONE recipe per turn (for several at once, save the FIRST and have them say \"next\" for " +
+          "each following one — and never re-save one you already did); and you CANNOT add a component, make a " +
+          "variation, or edit an existing recipe from the home chat — those are done from inside a recipe, so save " +
+          "what you can here and tell them to open that recipe to finish the rest.";
       } else {
         capabilityNote =
           "\n\n----- what you can do here -----\n" +
@@ -506,15 +565,17 @@ exports.claude = onCall(
       };
       if (tools.length) body.tools = tools;
     } else {
-      // recipe import (photo/link). Keep the client's request, but enforce safety caps.
-      body = data.body;
-      if (!body || !Array.isArray(body.messages)) {
-        throw new HttpsError("invalid-argument", "Missing or malformed request body.");
+      // recipe import (photo/link). The app only says which photos or which link (see import-guard.js).
+      // The server writes the instructions and picks the model, length and tools. Old installed apps
+      // still send a full request in data.body; only the photos or the link are read out of it.
+      try {
+        body = buildImportBody(data);
+      } catch (err) {
+        if (err && err.importGuard) throw new HttpsError("invalid-argument", err.message);
+        throw err;
       }
-      if (!ALLOWED_MODELS.includes(body.model)) body.model = "claude-haiku-4-5";
-      if (!(body.max_tokens > 0) || body.max_tokens > IMPORT_MAX_TOKENS) {
-        body.max_tokens = IMPORT_MAX_TOKENS;
-      }
+      // banned accounts can't import either, and every call counts against a daily ceiling
+      await takeImportQuota(uid);
     }
 
     // 3) forward to Claude with the secret key attached server-side
@@ -523,10 +584,6 @@ exports.claude = onCall(
       "x-api-key": ANTHROPIC_API_KEY.value(),
       "anthropic-version": "2023-06-01",
     };
-    // optional beta header (e.g. for the web-fetch tool used by link import)
-    if (data.anthropicBeta) {
-      headers["anthropic-beta"] = data.anthropicBeta;
-    }
 
     let res, json;
     try {
@@ -545,11 +602,26 @@ exports.claude = onCall(
       throw new HttpsError("internal", msg);
     }
 
-    // 4) a butter reply succeeded — count it (best-effort). A real message counts against the daily
-    //    limit; an automatic continuation counts only against the hidden continuation cap (free to the user).
+    // 4) a butter reply succeeded — count it (best-effort), but ONLY when butter actually produced
+    //    something usable. A no-op turn (empty content: no text AND no tool call) must NOT cost the baker
+    //    one of their daily messages. Continuations only ever count against the hidden free cap.
     if (data.kind === "butter") {
-      const counts = await bumpUsage(uid, data.continuation === true ? "cont" : "butter").catch(function () { return null; });
-      // report the AUTHORITATIVE daily count to the client so its "N of 6" / "used all 6" note is never wrong
+      const content = (json && Array.isArray(json.content)) ? json.content : [];
+      const usable = content.some(function (b) {
+        return b && ((b.type === "text" && (b.text || "").trim()) || b.type === "tool_use");
+      });
+      let counts = null;
+      if (data.continuation === true) {
+        counts = await bumpUsage(uid, "cont").catch(function () { return null; });
+      } else if (usable) {
+        counts = await bumpUsage(uid, "butter").catch(function () { return null; });
+      } else {
+        // no-op turn: don't charge. Report the CURRENT count so the client doesn't fall back to a local +1.
+        const s = await admin.firestore().collection("users").doc(uid).get().catch(function () { return null; });
+        const uu = (s && s.exists && s.data().usage) || {};
+        counts = { butter: (uu.day === todayStr() ? (uu.butter || 0) : 0) };
+      }
+      // report the AUTHORITATIVE daily count to the client so its "N of 4" / "used all 4" note is never wrong
       if (counts && json && typeof json === "object") {
         json.bbUsage = { used: counts.butter, limit: butterPremium ? PREMIUM_DAILY_FAIRUSE : DAILY_BUTTER_LIMIT, premium: butterPremium, quickMode: butterQuickMode };
       }
@@ -557,6 +629,59 @@ exports.claude = onCall(
 
     // 5) hand Claude's answer back to the browser
     return json;
+  }
+);
+
+// ---- make-it: map each step to the ingredients it uses ----
+// A cheap, STANDALONE Haiku call (its own path — does NOT count against or get blocked by the daily
+// butter chat limit). Given a recipe's ingredient names + step texts, returns, per step, which
+// ingredients are used — matched SEMANTICALLY: category words ("flours", "the dry ingredients",
+// "the wet ingredients", "sugars"), synonyms, and singular/plural — not just exact-name hits.
+// The browser caches the result on the recipe (recomputed on save) and cook-mode shows only each
+// step's ingredients; if this ever fails, the browser just shows all ingredients (never worse).
+exports.mapStepIngredients = onCall(
+  { secrets: [ANTHROPIC_API_KEY], cors: true },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Please sign in.");
+    const d = request.data || {};
+    const ing = (Array.isArray(d.ingredients) ? d.ingredients : []).slice(0, 60).map((s) => String(s || "").slice(0, 80));
+    const stp = (Array.isArray(d.steps) ? d.steps : []).slice(0, 60).map((s) => String(s || "").slice(0, 600));
+    if (!ing.length || !stp.length) return { steps: stp.map(() => []) };
+    const system =
+      "You map a recipe's ingredients to its steps for a step-by-step cooking view. For EACH step, list which " +
+      "ingredients are used or referenced — INCLUDING references by group or category, not just exact names. " +
+      "Rules: 'flour'/'flours' → every flour ingredient; 'the dry ingredients' → flours, sugars, salt, leaveners " +
+      "(baking powder/soda, yeast), cocoa, spices; 'the wet ingredients' → water, milk, buttermilk, eggs, oil, " +
+      "melted/softened butter, extracts, honey/syrup; 'sugars' → every sugar; also match singular/plural and " +
+      "common synonyms ('butter' ↔ 'unsalted butter', 'egg' ↔ 'eggs'). A step that references no specific " +
+      "ingredient (e.g. 'preheat the oven', 'rest 30 min', 'shape the dough', 'bake 25 min') gets an EMPTY list. " +
+      "Reply with ONLY a JSON object, no prose or markdown fences: {\"steps\": [[indices], ...]} — exactly one " +
+      "inner array per step, each holding 0-based indices into the ingredients list, in the order used.";
+    const user = "Ingredients (0-indexed):\n" + ing.map((n, i) => i + ". " + n).join("\n") +
+      "\n\nSteps (0-indexed):\n" + stp.map((s, i) => i + ". " + s).join("\n");
+    let json;
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-api-key": ANTHROPIC_API_KEY.value(), "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-haiku-4-5", max_tokens: 1000, system, messages: [{ role: "user", content: user }] }),
+      });
+      json = await res.json();
+    } catch (err) {
+      throw new HttpsError("unavailable", "couldn't reach the mapper");   // client catches → shows all
+    }
+    const text = ((json.content || []).map((b) => b.text || "").join("")).trim();
+    let parsed = null;
+    try { parsed = JSON.parse(text); } catch (e) { const m = text.match(/\{[\s\S]*\}/); if (m) { try { parsed = JSON.parse(m[0]); } catch (e2) {} } }
+    const raw = (parsed && Array.isArray(parsed.steps)) ? parsed.steps : null;
+    if (!raw) throw new HttpsError("internal", "bad mapper response");    // client catches → shows all
+    // sanitize: one array per step, valid unique in-range indices
+    const clean = stp.map((_, i) => {
+      const arr = Array.isArray(raw[i]) ? raw[i] : [];
+      const seen = {};
+      return arr.map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n < ing.length && !seen[n] && (seen[n] = 1));
+    });
+    return { steps: clean };
   }
 );
 
@@ -569,18 +694,78 @@ exports.deleteAccount = onCall({ cors: true }, async (request) => {
     throw new HttpsError("unauthenticated", "Please sign in first.");
   }
   const uid = request.auth.uid;
+  // INSTRUMENTATION (accounts have been vanishing unexpectedly): record WHO and WHERE every delete comes
+  // from, so the next occurrence is traceable. origin = app (capacitor://localhost) vs website; referer =
+  // which page fired it. This only logs; it does not change behavior, so build 9's delete still works.
   try {
-    // 1) their user doc AND its subcollections (recipes/*, meta/*) — Firestore does NOT
-    //    cascade-delete subcollections, so recursiveDelete is required to leave nothing behind.
-    await admin.firestore().recursiveDelete(admin.firestore().collection("users").doc(uid));
-    // 2) every photo they uploaded (all live under users/<uid>/...)
-    await admin.storage().bucket().deleteFiles({ prefix: "users/" + uid + "/" });
-    // 3) the login account itself
-    await admin.auth().deleteUser(uid);
+    const h = (request.rawRequest && request.rawRequest.headers) || {};
+    console.warn("deleteAccount CALLED " + JSON.stringify({
+      uid: uid, origin: h.origin || null, referer: h.referer || null, ua: (h["user-agent"] || "").slice(0, 120),
+    }));
+  } catch (e) {}
+  try {
+    // SOFT delete: we do NOT erase anything yet. We just stamp the account with `deletedAt` and keep the
+    // data, photos, and login fully intact for a GRACE_DAYS window. That way an accidental tap — or one of
+    // the unexplained deletions we've been chasing on the demo account — can be undone simply by signing
+    // back in (the client calls cancelDeletion on load). The real, permanent erase happens later, in the
+    // scheduled purgeDeletedAccounts job, once the window has passed. (Apple allows this grace period as long
+    // as the user is told and it does eventually delete — the delete-account copy says so.)
+    await admin.firestore().collection("users").doc(uid).set({
+      deletedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
   } catch (err) {
-    throw new HttpsError("internal", "Couldn't fully delete the account: " + err.message);
+    throw new HttpsError("internal", "Couldn't schedule the account for deletion: " + err.message);
   }
-  return { ok: true };
+  return { ok: true, softDeleted: true };
+});
+
+// ---- reactivate an account that's inside its 10-day deletion grace window ----
+// The client calls this automatically when it loads and sees `deletedAt` on the signed-in user's doc
+// (see bakebook-store.js). Clearing the stamp takes the account back off the purge list. The parent user
+// doc is server-write-only (firestore.rules `allow write: if false`), so this must be a Cloud Function.
+exports.cancelDeletion = onCall({ cors: true }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Please sign in first.");
+  }
+  const uid = request.auth.uid;
+  try {
+    const ref = admin.firestore().collection("users").doc(uid);
+    const snap = await ref.get();
+    const wasPending = snap.exists && snap.get("deletedAt");
+    if (wasPending) {
+      await ref.update({ deletedAt: admin.firestore.FieldValue.delete() });
+      console.log("cancelDeletion RESTORED " + uid);
+    }
+    return { restored: !!wasPending };
+  } catch (err) {
+    throw new HttpsError("internal", "Couldn't reactivate the account: " + err.message);
+  }
+});
+
+// ---- permanently erase accounts whose grace window has passed (runs daily) ----
+// deleteAccount only marks `deletedAt`; THIS is where the real, irreversible delete finally happens — but
+// only for accounts that were marked more than GRACE_DAYS ago and never signed back in (which would have
+// cleared the stamp via cancelDeletion). Requires Cloud Scheduler (auto-enabled on the Blaze plan at deploy).
+const GRACE_DAYS = 10;
+exports.purgeDeletedAccounts = onSchedule("every 24 hours", async () => {
+  const cutoff = admin.firestore.Timestamp.fromMillis(Date.now() - GRACE_DAYS * 24 * 60 * 60 * 1000);
+  // The inequality only matches docs that HAVE a `deletedAt` field, so live accounts are never touched.
+  const snap = await admin.firestore().collection("users").where("deletedAt", "<=", cutoff).get();
+  console.log("purgeDeletedAccounts: " + snap.size + " account(s) past the " + GRACE_DAYS + "-day window");
+  for (const doc of snap.docs) {
+    const uid = doc.id;
+    try {
+      // 1) their user doc AND its subcollections (recipes/*, meta/*) — recursiveDelete leaves nothing behind.
+      await admin.firestore().recursiveDelete(admin.firestore().collection("users").doc(uid));
+      // 2) every photo they uploaded (all live under users/<uid>/...)
+      await admin.storage().bucket().deleteFiles({ prefix: "users/" + uid + "/" });
+      // 3) the login account itself
+      await admin.auth().deleteUser(uid);
+      console.log("purged " + uid);
+    } catch (err) {
+      console.error("purgeDeletedAccounts: failed to purge " + uid + " — " + err.message);
+    }
+  }
 });
 
 // ---- bakebook+ subscriptions: RevenueCat webhook (the single source of truth for `premium`) ----

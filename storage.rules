@@ -3,7 +3,13 @@ service firebase.storage {
   match /b/{bucket}/o {
     // Each user's photos live under users/{uid}/... — only they can read/write them.
     match /users/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      // Uploads must be images under 5 MB. The app shrinks photos to 1000px JPEGs (a few hundred KB)
+      // before uploading, so real photos are far below this. Before 28 Sep 2026 any file of any size
+      // was accepted, which let a signed-in account store anything, even web pages, on bakebook's bill.
+      allow create, update: if request.auth != null && request.auth.uid == userId
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
     }
   }
 }

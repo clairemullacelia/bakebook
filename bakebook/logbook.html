@@ -14,14 +14,27 @@
   <style>
     body { margin: 0 auto; max-width: 480px;
       padding: calc(1.5rem + env(safe-area-inset-top, 0px)) 1.5rem calc(1.5rem + env(safe-area-inset-bottom, 0px)); }
+    /* faint ruled lab-notebook lines behind everything — the same "lab notebook" texture as the login page */
+    body::before { content: ""; position: fixed; inset: 0; z-index: -1; background-color: var(--paper);
+      background-image: repeating-linear-gradient(to bottom, transparent 0 31px, rgba(114,108,100,.06) 31px 32px); }
     a.back { color: var(--terracotta-deep); text-decoration: none; font-size: 0.95rem;
       display: inline-block; padding: 0.45rem 0.6rem 0.45rem 0; }   /* bigger tap target so it's easy to hit near the top */
-    h1 { text-align: center; color: var(--terracotta-deep); font-size: 1.6rem; margin: 0.5rem 0 0.25rem; }
+    /* bare "home" icon (b + measurement mark), top-right on every deep page — no bubble */
+    .home-btn { position: fixed; top: calc(0.55rem + env(safe-area-inset-top, 0px)); right: 0.95rem; z-index: 140;
+      background: none; border: none; padding: 0.3rem; cursor: pointer; -webkit-tap-highlight-color: transparent;
+      display: flex; align-items: center; justify-content: center; }
+    .home-btn img { height: 1.5rem; width: auto; display: block; }
+    .home-btn:active { opacity: 0.6; }
+    h1 { text-align: center; color: var(--heading); font-weight: 800; font-size: 1.6rem; letter-spacing: -0.3px; margin: 0.5rem 0 0.25rem; }
     .subtitle { text-align: center; color: var(--muted); margin: 0 0 1.25rem; }
     input, textarea { width: 100%; box-sizing: border-box; padding: 0.6rem 0.75rem;
       border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; font-family: inherit;
       background: var(--card); color: var(--ink); }
-    label { display: block; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    /* iOS draws native date inputs with a big intrinsic min-width that ignores width:100% and overflows
+       past the other fields (off the right edge). Reset the native appearance + clamp it to the container. */
+    input[type="date"] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%;
+      text-align: center; font-family: var(--mono); }
+    label { display: block; font-family: var(--mono); font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
       color: var(--muted); margin: 1rem 0 0.35rem; }
     .form-title { font-size: 1.5rem; margin: 0.2rem 0 1rem; }
     .search { margin-bottom: 1rem; }
@@ -33,17 +46,18 @@
       background: linear-gradient(135deg, var(--butter-pale), var(--tan)); }
     .ephoto img { width: 100%; height: 100%; object-fit: cover; }
     .ebody { flex: 1; min-width: 0; }
-    .edate { font-family: var(--display); font-weight: 600; color: var(--heading); font-size: 1.05rem; }
+    .edate { font-family: var(--mono); font-weight: 600; color: var(--heading); font-size: 0.95rem; letter-spacing: 0.01em; }
     .esnip { color: var(--muted); font-size: 0.88rem; margin-top: 0.1rem;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .etags { display: flex; gap: 0.35rem; margin-top: 0.35rem; flex-wrap: wrap; }
-    .etag { font-size: 0.68rem; font-weight: 700; color: var(--accent); background: var(--accent-tint);
-      border: 1px solid #E4D08C; border-radius: 999px; padding: 0.1rem 0.5rem; }
+    .etag { font-family: var(--mono); font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+      color: var(--accent); background: var(--accent-tint);
+      border: 1px solid var(--teal-bright); border-radius: 999px; padding: 0.12rem 0.5rem; }   /* was #E4D08C (gold) — clashed with the teal tag */
     .empty { text-align: center; color: var(--terracotta-deep); font-style: italic; padding: 1.5rem; }
     button.primary { display: block; width: 100%; margin-top: 1.25rem; padding: 0.8rem;
       font-size: 1.05rem; font-weight: 700; color: var(--paper); background: var(--terracotta-deep); border: none;
       border-radius: 999px; cursor: pointer; }
-    button.primary:hover { background: #8F4634; }
+    button.primary:hover { background: #00647C; }
     button.ghost { display: block; background: none; border: none; color: var(--terracotta-deep);
       cursor: pointer; font-size: 0.95rem; margin: 1rem auto 0; }
     button.delete { background: none; border: none; color: var(--danger); cursor: pointer;
@@ -69,6 +83,9 @@
 </head>
 <body>
   <a class="back" id="back" href="index.html">← back to recipe</a>
+  <button class="home-btn" id="homeBtn" type="button" aria-label="home" title="home">
+    <img src="home.svg" alt="home">
+  </button>
   <h1>log book</h1>
   <p class="subtitle" id="subtitle"></p>
 
@@ -112,20 +129,34 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="firebase-init.js"></script>
+  <script src="bakebook-events.js"></script>   <!-- the event log: what people do, never what they wrote -->
   <script src="bakebook-store.js"></script>
+  <script src="bakebook-back.js"></script>   <!-- Android back gesture: one step back, never quit -->
   <script>
     // must be signed in — a bake log lives inside your cloud recipe
     firebase.auth().onAuthStateChanged(function (u) { if (!u) location.replace("index.html"); });
 
     function loadRecipes() { return JSON.parse(localStorage.getItem("bakebook.recipes")) || []; }
-    function saveRecipes() {
+    // Save this page's bake changes. `changedLogId` is the bake this save added or edited (if any).
+    // Only the bakes (logs), the deleted-bakes list (deletedLogs) and the edit time are written, onto
+    // the FRESHEST stored copy of the recipe. Everything else (name, ingredients, photos...) keeps the
+    // stored value, so an edit that synced in from another device while the form was open is not undone.
+    function saveRecipes(changedLogId) {
       try {
         // re-read the freshest list so a log save updates ONLY this recipe and never clobbers an
         // edit that synced in from another device.
         let fresh; try { fresh = JSON.parse(localStorage.getItem("bakebook.recipes")) || []; } catch (e) { fresh = recipes; }
         if (recipe && recipe.id) {
           const idx = fresh.findIndex(function (r) { return r && r.id === recipe.id; });
-          if (idx >= 0) fresh[idx] = recipe; else fresh.push(recipe);
+          if (idx >= 0) {
+            recipe = mergeBakes(fresh[idx], recipe, changedLogId);   // later saves start from this copy
+            fresh[idx] = recipe;
+          } else {
+            fresh.push(recipe);   // deleted elsewhere: put this page's copy back, as before
+          }
+          recipe.updatedAt = Date.now();   // stamp the edit time so sync keeps this (newer) copy — without
+                                           // this, a log edit isn't seen as "newer" and the cloud's older
+                                           // copy wins on the next page load, silently losing the edit.
           recipes = fresh;
         }
         localStorage.setItem("bakebook.recipes", JSON.stringify(recipes));
@@ -134,6 +165,35 @@
         bbNotice("couldn't save — storage is full. try removing a photo to free up space.");
         return false;
       }
+    }
+
+    // Build the recipe to save: the stored copy, with only its bakes and deleted-bakes list changed.
+    // No bake is lost: a bake another device logged (the stored copy has it, the page doesn't) is kept.
+    // A bake deleted on either device (its id is on either deleted list) stays gone.
+    function mergeBakes(stored, page, changedLogId) {
+      const deleted = (stored.deletedLogs || []).slice();
+      (page.deletedLogs || []).forEach(function (d) { if (deleted.indexOf(d) === -1) deleted.push(d); });
+      const pageById = {};
+      (page.logs || []).forEach(function (l) { if (l && l.id) pageById[l.id] = l; });
+      const storedIds = {};
+      const logs = [];
+      // 1. the stored bakes, in their stored order. Each keeps the stored version (which may hold an
+      //    edit from another device), except the one bake this save changed: that uses the page's version.
+      (stored.logs || []).forEach(function (l) {
+        if (!l) return;
+        if (l.id) storedIds[l.id] = 1;
+        if (l.id && deleted.indexOf(l.id) !== -1) return;
+        logs.push(l.id && l.id === changedLogId && pageById[l.id] ? pageById[l.id] : l);
+      });
+      // 2. then the page's new bakes, at the end (the shape the sync likes best: "the old list plus these").
+      (page.logs || []).forEach(function (l) {
+        if (!l || (l.id && storedIds[l.id])) return;
+        if (l.id && deleted.indexOf(l.id) !== -1) return;
+        logs.push(l);
+      });
+      const out = Object.assign({}, stored, { logs: logs });
+      if (deleted.length) out.deletedLogs = deleted;
+      return out;
     }
 
     // Shrink an image file into a small, storable data URL.
@@ -190,6 +250,11 @@
 
     const id = new URLSearchParams(location.search).get("id");
     document.getElementById("back").href = "recipe.html?id=" + encodeURIComponent(id);
+    // "home" icon (top-right): always one tap back to home; flush any pending saves first.
+    document.getElementById("homeBtn").addEventListener("click", function () {
+      try { if (window.bakebookFlush) bakebookFlush(); } catch (e) {}
+      location.href = "index.html";
+    });
 
     let recipes = loadRecipes();
     let recipe = recipes.find(function (r) { return r.id === id; });
@@ -213,12 +278,22 @@
         renderList();
       }
     }
-    // wait for the cloud copy before drawing
-    if (window.bakebookWhenReady) bakebookWhenReady(startLog); else startLog();
+    // Draw immediately from the local copy so the logged bakes appear right away instead of
+    // freezing on an empty screen during the cloud-sync round-trip. (Skip the early draw if the
+    // recipe isn't in the local copy yet — e.g. a fresh device — so we don't flash "recipe not
+    // found"; the ready callback below draws it once the cloud copy arrives.)
+    if (recipe) startLog();
+    // redraw once the cloud copy is confirmed, reconciling anything newer from another device.
+    if (window.bakebookWhenReady) bakebookWhenReady(startLog); else if (!recipe) startLog();
     // live updates from other devices — but not while a bake is being written in the form
     if (window.bakebookOnChange) bakebookOnChange(function () { if (formView.classList.contains("hidden")) startLog(); });
 
-    function todayISO() { return new Date().toISOString().slice(0, 10); }   // YYYY-MM-DD
+    // today's date on the baker's own clock (YYYY-MM-DD). Not toISOString(): that is world time (UTC),
+    // which is already tomorrow on a US evening.
+    function todayISO() {
+      const d = new Date();
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    }
     function fmtDate(iso) {
       const p = (iso || "").split("-");
       if (p.length !== 3) return iso || "(no date)";
@@ -262,6 +337,7 @@
         body.appendChild(date); body.appendChild(snip);
 
         const tags = document.createElement("div"); tags.className = "etags";
+        if (entry.resultsPending && !(entry.notes || "").trim()) tags.appendChild(makeTag("results to add"));   // saved from make it with "later"
         if (entry.ingredientChanges) tags.appendChild(makeTag("ingredients"));
         if (entry.methodChanges) tags.appendChild(makeTag("method"));
         if (entry.photos && entry.photos.length) tags.appendChild(makeTag(entry.photos.length + (entry.photos.length > 1 ? " photos" : " photo")));
@@ -294,7 +370,9 @@
     }
 
     document.getElementById("logBakeBtn").addEventListener("click", function () { openForm(null); });
-    document.getElementById("cancelBtn").addEventListener("click", showList);
+    // back to the list without saving: re-read the stored copy, so changes that synced in while the form
+    // was open (held back then, so the form isn't reset under your hands) show up now.
+    document.getElementById("cancelBtn").addEventListener("click", function () { showList(); startLog(); });
 
     document.getElementById("addPhotoBtn").addEventListener("click", function () {
       document.getElementById("photoInput").click();
@@ -320,12 +398,16 @@
         const entry = recipe.logs.find(function (e) { return e.id === editingId; });
         entry.date = data.date; entry.ingredientChanges = data.ingredientChanges;
         entry.methodChanges = data.methodChanges; entry.notes = data.notes; entry.photos = data.photos;
+        if (entry.resultsPending && entry.notes) delete entry.resultsPending;   // results added: the recipe page's dot goes
       } else {
         data.id = "l" + Date.now() + Math.random().toString(36).slice(2, 7);
         recipe.logs.push(data);
       }
-      if (!saveRecipes()) return;
-      showList();
+      if (!saveRecipes(editingId || data.id)) return;
+      if (!editingId && window.bbLog) bbLog("bake_logged", { recipeId: recipe.id });
+      // back to the list, redrawn from the stored copy (like cancel), so a change that synced in while
+      // the form was open (a new recipe name, say) shows now. startLog only redraws; it saves nothing.
+      showList(); startLog();
     });
 
     // a small on-brand toast for gentle nudges (replaces the OS alert() box); .bb-notice lives in styles.css
@@ -361,9 +443,17 @@
       if (at === -1) return;
       const removed = recipe.logs[at];
       recipe.logs.splice(at, 1);
-      saveRecipes();
-      showList();
-      showUndo("bake log removed", function () { recipe.logs.splice(at, 0, removed); saveRecipes(); showList(); });
+      // remember the deleted bake's id so another device that still has it can't put it back
+      if (removed.id) recipe.deletedLogs = (recipe.deletedLogs || []).concat([removed.id]);
+      // storage full: nothing was removed, so put the page back to the stored copy (the bake is still
+      // there, the form stays open) and show no "removed" or undo.
+      if (!saveRecipes()) { startLog(); return; }
+      showList(); startLog();   // redraw from the stored copy, as after a save
+      // undo brings it back under a NEW id: the old id stays deleted on every device
+      showUndo("bake log removed", function () {
+        const back = Object.assign({}, removed, { id: "l" + Date.now() + Math.random().toString(36).slice(2, 7) });
+        recipe.logs.splice(at, 0, back); saveRecipes(); showList(); startLog();
+      });
     });
   </script>
 </body>

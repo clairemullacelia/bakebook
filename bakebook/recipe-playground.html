@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bakebook · recipe page playground</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     bakebook brand tokens (copied from styles.css so the preview
+     is true-to-app). Colours you can also tweak live are mirrored
+     into --pg-* below and consumed by the reading view.
+     ============================================================ */
+  :root{
+    --paper:#F6F4EE; --card:#FDFCFA; --cream:#EEEAE0; --border:#E4DFD5;
+    --tan:#DFC7AC; --grid:#CFC7B8; --teal:#007E9C; --teal-dark:#00647C;
+    --terracotta:#007E9C; --terracotta-deep:#007E9C; --warm:#B54939;
+    --ink:#1e1714; --heading:#1e1714; --muted:#726C64;
+    --display:"Source Sans 3",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --body:"Source Sans 3",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --mono:"Source Code Pro",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:var(--body); color:var(--ink); background:#2a2622;
+    display:flex; min-height:100vh; overflow:hidden;
+  }
+
+  /* ---------------- control panel ---------------- */
+  #panel{
+    width:340px; flex:0 0 340px; height:100vh; overflow-y:auto;
+    background:#211d1a; color:#e7e2d9; padding:0 0 3rem;
+    border-right:1px solid #000; font-size:13px;
+  }
+  #panel h1{
+    font-family:var(--mono); font-size:.72rem; letter-spacing:.18em; text-transform:uppercase;
+    color:#8fd4e6; margin:0; padding:1.1rem 1.1rem .3rem; font-weight:600;
+  }
+  #panel .sub{ padding:0 1.1rem 1rem; color:#8a847b; font-size:11px; line-height:1.5; }
+  .grp{ border-top:1px solid #35302b; }
+  .grp>summary{
+    cursor:pointer; padding:.7rem 1.1rem; font-family:var(--mono); font-size:.68rem;
+    letter-spacing:.14em; text-transform:uppercase; color:#c9c2b6; font-weight:600;
+    list-style:none; display:flex; justify-content:space-between; align-items:center;
+  }
+  .grp>summary::-webkit-details-marker{display:none}
+  .grp>summary::after{content:"–"; color:#6d665d}
+  .grp:not([open])>summary::after{content:"+"}
+  .grp[open]>summary{ color:#8fd4e6; }
+  .ctrl{ padding:.5rem 1.1rem .7rem; }
+  .ctrl .lbl{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:.3rem; gap:.5rem; }
+  .ctrl .lbl span:first-child{ color:#cfc9be; }
+  .ctrl .val{ font-family:var(--mono); font-size:11px; color:#f0c98a; }
+  .ctrl input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:3px; border-radius:9px;
+    background:#4a443c; outline:none; margin:0;
+  }
+  .ctrl input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:15px; height:15px; border-radius:50%;
+    background:#8fd4e6; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.4);
+  }
+  .ctrl input[type=range]::-moz-range-thumb{
+    width:15px; height:15px; border:none; border-radius:50%; background:#8fd4e6; cursor:pointer;
+  }
+  .ctrl input[type=color]{
+    width:100%; height:26px; border:1px solid #4a443c; border-radius:6px; background:#2a2622; cursor:pointer; padding:2px;
+  }
+  .actions{ display:flex; gap:.5rem; padding:1rem 1.1rem; position:sticky; bottom:0; background:#211d1a; border-top:1px solid #35302b; }
+  .actions button{
+    flex:1; font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+    padding:.6rem; border-radius:7px; cursor:pointer; border:1px solid #4a443c; background:#2f2a25; color:#e7e2d9;
+  }
+  .actions button.primary{ background:#0a6f8a; border-color:#0a6f8a; color:#fff; font-weight:700; }
+  .actions button:hover{ filter:brightness(1.15); }
+
+  /* ---------------- stage / device ---------------- */
+  #stagewrap{ flex:1; height:100vh; overflow:auto; display:flex; align-items:flex-start; justify-content:center; padding:2.2rem 1.5rem 4rem; }
+  #devicebar{ position:fixed; top:0; left:340px; right:0; height:0; }
+  .device{
+    width:var(--pg-frame-w,393px);
+    background:var(--pg-paper,#F6F4EE);
+    border-radius:38px; box-shadow:0 0 0 11px #14110f, 0 22px 60px rgba(0,0,0,.55);
+    overflow:hidden; position:relative; transition:width .15s ease;
+  }
+  .notch{ height:30px; display:flex; align-items:center; justify-content:center; }
+  .notch::after{ content:""; width:120px; height:22px; background:#14110f; border-radius:0 0 16px 16px; }
+
+  /* ============================================================
+     READING VIEW — the real recipe.html classes, rewritten to
+     read from --pg-* variables so the sliders drive them live.
+     Defaults equal the current shipped values.
+     ============================================================ */
+  .rv{
+    background:var(--pg-paper,#F6F4EE); color:var(--pg-ink,#1e1714);
+    padding:.6rem var(--pg-gutter,1.1rem) 2.5rem; font-family:var(--body); line-height:1.5;
+    font-size:var(--pg-base,16px);
+  }
+  .rv .topactions{ display:flex; justify-content:flex-end; margin:.25rem 0 .5rem; }
+  .rv .editbtn{ background:none; border:1.5px solid var(--pg-teal,#007E9C); color:var(--pg-teal,#007E9C);
+    border-radius:999px; padding:.3rem .95rem; font-weight:700; font-family:var(--body); font-size:.9rem; }
+  .rv .reyebrow{ font-family:var(--mono); font-size:var(--pg-eyebrow-size,.72rem); letter-spacing:var(--pg-eyebrow-track,.16em);
+    text-transform:uppercase; color:var(--warm); font-weight:600; display:flex; align-items:center; gap:.7em; margin:.3rem 0 .15rem; }
+  .rv .reyebrow::after{ content:""; flex:1; height:1px; background:var(--pg-grid,#CFC7B8); }
+  .rv .rtitle{ font-family:var(--display); font-weight:700;
+    font-size:var(--pg-title-size,1.95rem); line-height:var(--pg-title-lh,1.15);
+    margin:var(--pg-title-mt,.1rem) 0 var(--pg-title-mb,.3rem); }
+  .rv .rmeta{ font-family:var(--mono); font-size:var(--pg-meta-size,.85rem); font-weight:600; color:var(--pg-ink,#1e1714);
+    letter-spacing:.01em; margin:.35rem 0 .15rem; }
+  .rv .rdesc{ margin:.3rem 0 var(--pg-desc-mb,1rem); color:var(--muted); font-family:var(--mono);
+    font-size:var(--pg-desc-size,.82rem); letter-spacing:.01em; line-height:1.5; }
+  .rv .rsection{ text-align:left; font-family:var(--mono); text-transform:uppercase;
+    letter-spacing:var(--pg-section-track,.13em); font-size:var(--pg-section-size,.8rem); font-weight:700;
+    color:var(--heading); margin:var(--pg-section-mt,1.7rem) 0 var(--pg-section-mb,.7rem); }
+
+  /* ingredients */
+  .rv .ing-table{ border:none; background:none; }
+  .rv .ing-head{ display:flex; border-bottom:1px solid var(--pg-grid,#CFC7B8); }
+  .rv .ing-head .hcell{ flex:1; border:none; background:none; padding:.45rem; font-family:var(--body);
+    font-size:.85rem; font-weight:700; color:var(--muted); text-align:left; }
+  .rv .ing-head .hcell.on{ color:var(--pg-teal,#007E9C); text-decoration:underline; }
+  .rv .ing-line{ display:grid;
+    grid-template-columns:var(--pg-amt-col,5.5rem) 1fr var(--pg-note-col,2.2rem);
+    align-items:stretch; border-bottom:1px solid var(--pg-grid,#CFC7B8); }
+  .rv .ing-line:last-child{ border-bottom:none; }
+  .rv .il-amt{ display:flex; align-items:center; justify-content:flex-end; text-align:right;
+    padding:var(--pg-ing-py,.55rem) var(--pg-ing-px,.7rem); font-family:var(--mono); font-weight:600; color:var(--pg-teal-dark,#00647C); }
+  .rv .il-name{ display:flex; align-items:center; padding:var(--pg-ing-py,.55rem) var(--pg-ing-px,.7rem);
+    font-family:var(--body); color:var(--pg-ink,#1e1714); font-size:var(--pg-ing-name-size,1.02rem); }
+  .rv .il-note{ display:flex; align-items:center; justify-content:center; }
+  .rv .notebtn{ background:none; border:none; color:var(--muted); padding:4px; display:flex; }
+  .rv .notebtn.has{ color:var(--warm); }
+  .rv .il-noterow{ grid-column:1/-1; padding:.35rem .75rem .5rem; font-size:.8rem; font-style:italic;
+    color:var(--muted); background:var(--cream); border-bottom:1px solid var(--border); }
+
+  /* method */
+  .rv .method-list{ border-top:1px solid var(--border); }
+  .rv .method-row{ display:grid;
+    grid-template-columns:var(--pg-num-col,1.7rem) 1fr var(--pg-mnote-col,2.2rem);
+    gap:var(--pg-method-gap,.3rem); align-items:start;
+    padding:var(--pg-method-py,.5rem) .1rem; border-bottom:1px solid var(--border); }
+  .rv .m-num{ font-family:var(--mono); font-weight:700; color:var(--pg-teal-dark,#00647C); }
+  .rv .m-text{ line-height:var(--pg-method-lh,1.5); color:var(--pg-ink,#1e1714); font-size:var(--pg-method-size,1rem); }
+  .rv .m-note{ display:flex; justify-content:center; padding-top:.1rem; }
+  .rv .photos{ display:flex; gap:.5rem; flex-wrap:wrap; }
+  .rv .photo{ width:80px; height:80px; border-radius:10px; background:var(--cream); border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:1.4rem; }
+
+  /* ============================================================
+     MAKE IT — the full-screen cook-mode step view (#cookMode /
+     .cook-steptext in recipe.html). Big centered step, the step's
+     ingredients below, a dot scrubber at the foot.
+     ============================================================ */
+  .cook{ display:none; flex-direction:column; min-height:720px; background:var(--pg-paper,#F6F4EE); color:var(--pg-ink,#1e1714); padding:1rem 1.1rem 1.3rem; }
+  .cook-top{ flex:0 0 auto; display:flex; justify-content:space-between; align-items:center; }
+  .cook-counter{ font-family:var(--mono); font-size:var(--pg-cook-counter,.72rem); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); font-weight:600; }
+  .cook-x{ color:var(--muted); font-size:1.1rem; }
+  .cook-stage{ flex:1; display:flex; overflow:hidden; }
+  .cook-steptext{ font-family:var(--display); font-weight:600; text-align:center; margin:auto;
+    font-size:var(--pg-cook-size,1.7rem); line-height:var(--pg-cook-lh,1.45);
+    padding-inline:var(--pg-cook-px,1.5rem); color:var(--pg-ink,#1e1714); }
+  .cook-ings{ flex:0 0 auto; border-top:1px solid var(--pg-grid,#CFC7B8); padding-top:.7rem; margin-top:.7rem; }
+  .cook-ings-lbl{ font-family:var(--mono); font-size:.62rem; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700; margin-bottom:.4rem; }
+  .cook-ing{ display:flex; gap:.6rem; font-size:var(--pg-cook-ing,.9rem); padding:.12rem 0; color:var(--pg-ink,#1e1714); }
+  .cook-ing b{ font-family:var(--mono); font-weight:600; color:var(--pg-teal-dark,#00647C); min-width:4rem; text-align:right; }
+  .cook-dots{ flex:0 0 auto; display:flex; justify-content:center; align-items:center; gap:var(--pg-dot-gap,10px); padding-top:1rem; }
+  .cook-dots .cd{ width:var(--pg-dot-size,8px); height:var(--pg-dot-size,8px); border-radius:50%; background:var(--pg-grid,#CFC7B8); }
+  .cook-dots .cd.on{ background:var(--pg-teal,#007E9C); transform:scale(1.5); }
+
+  /* mode switching */
+  body.mode-cook .rv{ display:none; }
+  body.mode-cook .cook{ display:flex; }
+  .grp[data-mode="cook"]{ display:none; }
+  body.mode-cook .grp[data-mode="read"]{ display:none; }
+  body.mode-cook .grp[data-mode="cook"]{ display:block; }
+
+  /* mode switch bar */
+  .modebar{ display:flex; gap:.4rem; padding:.2rem 1.1rem 1rem; }
+  .modebar button{ flex:1; font-family:var(--mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase;
+    padding:.55rem; border-radius:7px; cursor:pointer; border:1px solid #4a443c; background:#2a2622; color:#b8b1a6; }
+  .modebar button.on{ background:#0a6f8a; border-color:#0a6f8a; color:#fff; font-weight:700; }
+  .steptoggle{ display:flex; gap:.4rem; }
+  .steptoggle button{ flex:1; font-family:var(--mono); font-size:10px; letter-spacing:.06em; text-transform:uppercase;
+    padding:.45rem; border-radius:6px; cursor:pointer; border:1px solid #4a443c; background:#2a2622; color:#b8b1a6; }
+  .steptoggle button.on{ background:#3a5f2f; border-color:#3a5f2f; color:#fff; }
+</style>
+</head>
+<body>
+
+<aside id="panel">
+  <h1>Recipe page · playground</h1>
+  <div class="sub">Drag to reshape the real views. Nothing here touches the live app — when you like it, hit <b>Copy CSS</b> and paste into <code>recipe.html</code>.</div>
+  <div class="modebar">
+    <button id="mRead" class="on">Reading page</button>
+    <button id="mCook">Make it</button>
+  </div>
+  <div id="controls"></div>
+  <div class="actions">
+    <button id="reset">Reset</button>
+    <button id="copy" class="primary">Copy CSS</button>
+  </div>
+</aside>
+
+<main id="stagewrap">
+  <div class="device" id="device">
+    <div class="notch"></div>
+    <div class="rv" id="rv">
+      <div class="topactions"><button class="editbtn">Edit</button></div>
+      <div class="reyebrow">Bread</div>
+      <h1 class="rtitle">Country Sourdough Loaf</h1>
+      <div class="rmeta">Active 40 min · Total 18 hr · Makes 1 loaf</div>
+      <div class="rdesc">72% hydration · overnight cold proof · a crackly, open-crumb boule built on a mature levain and a long, cold retard.</div>
+
+      <div class="rsection">Ingredients</div>
+      <div class="ing-table">
+        <div class="ing-head"><div class="hcell on">Amount</div><div class="hcell">Ingredient</div></div>
+        <div class="ing-line"><div class="il-amt">500 g</div><div class="il-name">bread flour</div><div class="il-note"><span class="notebtn">◔</span></div></div>
+        <div class="ing-line"><div class="il-amt">360 g</div><div class="il-name">water, 30°C</div><div class="il-note"><span class="notebtn">◔</span></div></div>
+        <div class="ing-line"><div class="il-amt">100 g</div><div class="il-name">active levain</div><div class="il-note"><span class="notebtn has">●</span></div></div>
+        <div class="il-noterow">Fed 1:2:2 the night before — should float in water when ready.</div>
+        <div class="ing-line"><div class="il-amt">11 g</div><div class="il-name">fine sea salt</div><div class="il-note"><span class="notebtn">◔</span></div></div>
+        <div class="ing-line"><div class="il-amt">50 g</div><div class="il-name">whole wheat flour</div><div class="il-note"><span class="notebtn">◔</span></div></div>
+      </div>
+
+      <div class="rsection">Method</div>
+      <div class="method-list">
+        <div class="method-row"><div class="m-num">1</div><div class="m-text">Mix flour and water, hold back the salt, and rest 45 minutes to autolyse.</div><div class="m-note">◔</div></div>
+        <div class="method-row"><div class="m-num">2</div><div class="m-text">Add the levain and salt, then work the dough until it comes together into a smooth, cohesive mass.</div><div class="m-note">◔</div></div>
+        <div class="method-row"><div class="m-num">3</div><div class="m-text">Bulk ferment about 4 hours at 24°C, giving the dough a set of stretch-and-folds every 30 minutes for the first two hours. You want it to grow roughly 50% in volume, feel airy and alive, and hold a soft dome when you nudge the side of the bowl — this is the step people rush, and rushing it is why a loaf comes out dense. Watch the dough, not the clock.</div><div class="m-note">◔</div></div>
+        <div class="method-row"><div class="m-num">4</div><div class="m-text">Pre-shape, bench rest 20 minutes, then shape tight and place seam-up in a floured banneton.</div><div class="m-note">◔</div></div>
+        <div class="method-row"><div class="m-num">5</div><div class="m-text">Cold retard overnight, 12–16 hours at 4°C.</div><div class="m-note">◔</div></div>
+        <div class="method-row"><div class="m-num">6</div><div class="m-text">Bake 20 min covered at 250°C, then 20–25 min uncovered until deep brown.</div><div class="m-note">◔</div></div>
+      </div>
+
+      <div class="rsection">Photos</div>
+      <div class="photos"><div class="photo">🍞</div><div class="photo">＋</div></div>
+    </div>
+
+    <div class="cook" id="cook">
+      <div class="cook-top"><span class="cook-counter">Step 3 / 6</span><span class="cook-x">✕</span></div>
+      <div class="cook-stage"><div class="cook-steptext" id="cookText"></div></div>
+      <div class="cook-ings">
+        <div class="cook-ings-lbl">In this step</div>
+        <div class="cook-ing"><b>100 g</b><span>active levain</span></div>
+        <div class="cook-ing"><b>11 g</b><span>fine sea salt</span></div>
+        <div class="cook-ing"><b>500 g</b><span>bread flour</span></div>
+      </div>
+      <div class="cook-dots"><span class="cd"></span><span class="cd"></span><span class="cd on"></span><span class="cd"></span><span class="cd"></span><span class="cd"></span></div>
+    </div>
+  </div>
+</main>
+
+<script>
+/* ------------------------------------------------------------------
+   Every control drives a --pg-* variable on the .rv element. The
+   `css` field records which real recipe.html selector/property it
+   maps to, so Copy CSS can emit a paste-ready block.
+   ------------------------------------------------------------------ */
+const rv = document.getElementById('rv');
+const device = document.getElementById('device');
+
+const GROUPS = [
+  { name:'Frame', mode:'read', open:true, ctrls:[
+    { var:'--pg-frame-w', label:'Device width', min:320, max:768, step:1, unit:'px', def:393, target:device, css:null },
+    { var:'--pg-gutter',  label:'Page side padding', min:0, max:3, step:.05, unit:'rem', def:1.1, css:{sel:'.rv (page)', prop:'padding-inline'} },
+    { var:'--pg-base',    label:'Base font size', min:13, max:20, step:.5, unit:'px', def:16, css:{sel:'html/body', prop:'font-size'} },
+  ]},
+  { name:'Title & header', mode:'read', open:true, ctrls:[
+    { var:'--pg-title-size',   label:'Title size', min:1.1, max:3.2, step:.01, unit:'rem', def:1.95, css:{sel:'.rtitle', prop:'font-size'} },
+    { var:'--pg-title-lh',     label:'Title line-height', min:.95, max:1.7, step:.01, unit:'', def:1.15, css:{sel:'.rtitle', prop:'line-height'} },
+    { var:'--pg-title-mt',     label:'Title space above', min:0, max:2, step:.05, unit:'rem', def:.1, css:{sel:'.rtitle', prop:'margin-top'} },
+    { var:'--pg-title-mb',     label:'Title space below', min:0, max:2, step:.05, unit:'rem', def:.3, css:{sel:'.rtitle', prop:'margin-bottom'} },
+    { var:'--pg-eyebrow-size', label:'Eyebrow size', min:.55, max:1.1, step:.01, unit:'rem', def:.72, css:{sel:'.reyebrow', prop:'font-size'} },
+    { var:'--pg-eyebrow-track',label:'Eyebrow tracking', min:0, max:.4, step:.005, unit:'em', def:.16, css:{sel:'.reyebrow', prop:'letter-spacing'} },
+    { var:'--pg-meta-size',    label:'Meta line size', min:.6, max:1.2, step:.01, unit:'rem', def:.85, css:{sel:'.rmeta', prop:'font-size'} },
+    { var:'--pg-desc-size',    label:'Description size', min:.6, max:1.2, step:.01, unit:'rem', def:.82, css:{sel:'.rdesc', prop:'font-size'} },
+    { var:'--pg-desc-mb',      label:'Description space below', min:0, max:2.5, step:.05, unit:'rem', def:1, css:{sel:'.rdesc', prop:'margin-bottom'} },
+  ]},
+  { name:'Section labels', mode:'read', open:false, ctrls:[
+    { var:'--pg-section-size',  label:'Label size', min:.6, max:1.2, step:.01, unit:'rem', def:.8, css:{sel:'.rsection', prop:'font-size'} },
+    { var:'--pg-section-track', label:'Label tracking', min:0, max:.35, step:.005, unit:'em', def:.13, css:{sel:'.rsection', prop:'letter-spacing'} },
+    { var:'--pg-section-mt',    label:'Space above label', min:0, max:3.5, step:.05, unit:'rem', def:1.7, css:{sel:'.rsection', prop:'margin-top'} },
+    { var:'--pg-section-mb',    label:'Space below label', min:0, max:2, step:.05, unit:'rem', def:.7, css:{sel:'.rsection', prop:'margin-bottom'} },
+  ]},
+  { name:'Ingredients', mode:'read', open:false, ctrls:[
+    { var:'--pg-amt-col',       label:'Amount column width', min:3, max:9, step:.1, unit:'rem', def:5.5, css:{sel:'.ing-line', prop:'grid col 1'} },
+    { var:'--pg-note-col',      label:'Note column width', min:1.4, max:3.5, step:.1, unit:'rem', def:2.2, css:{sel:'.ing-line', prop:'grid col 3'} },
+    { var:'--pg-ing-py',        label:'Row height (vert. pad)', min:.2, max:1.4, step:.02, unit:'rem', def:.55, css:{sel:'.il-amt/.il-name', prop:'padding-block'} },
+    { var:'--pg-ing-px',        label:'Row side padding', min:.2, max:1.4, step:.02, unit:'rem', def:.7, css:{sel:'.il-amt/.il-name', prop:'padding-inline'} },
+    { var:'--pg-ing-name-size', label:'Ingredient name size', min:.8, max:1.4, step:.01, unit:'rem', def:1.02, css:{sel:'.il-name', prop:'font-size'} },
+  ]},
+  { name:'Method', mode:'read', open:false, ctrls:[
+    { var:'--pg-num-col',     label:'Number column width', min:1.2, max:3, step:.1, unit:'rem', def:1.7, css:{sel:'.method-row', prop:'grid col 1'} },
+    { var:'--pg-mnote-col',   label:'Note column width', min:1.4, max:3.5, step:.1, unit:'rem', def:2.2, css:{sel:'.method-row', prop:'grid col 3'} },
+    { var:'--pg-method-gap',  label:'Number ↔ text gap', min:0, max:1.5, step:.02, unit:'rem', def:.3, css:{sel:'.method-row', prop:'gap'} },
+    { var:'--pg-method-py',   label:'Row spacing (vert. pad)', min:.2, max:1.6, step:.02, unit:'rem', def:.5, css:{sel:'.method-row', prop:'padding-block'} },
+    { var:'--pg-method-size', label:'Step text size', min:.8, max:1.4, step:.01, unit:'rem', def:1, css:{sel:'.m-text', prop:'font-size'} },
+    { var:'--pg-method-lh',   label:'Step line-height', min:1.1, max:2, step:.01, unit:'', def:1.5, css:{sel:'.m-text', prop:'line-height'} },
+  ]},
+  { name:'Colour', mode:'read', open:false, ctrls:[
+    { var:'--pg-paper',     label:'Page background', type:'color', def:'#F6F4EE', css:{sel:'--paper', prop:'value'} },
+    { var:'--pg-ink',       label:'Body text', type:'color', def:'#1e1714', css:{sel:'--ink', prop:'value'} },
+    { var:'--pg-teal-dark', label:'Amounts / numbers', type:'color', def:'#00647C', css:{sel:'--teal-dark', prop:'value'} },
+    { var:'--pg-teal',      label:'Accent (teal)', type:'color', def:'#007E9C', css:{sel:'--teal', prop:'value'} },
+    { var:'--pg-grid',      label:'Hairline rules', type:'color', def:'#CFC7B8', css:{sel:'--grid', prop:'value'} },
+  ]},
+
+  /* ---- MAKE IT (cook mode) ---- */
+  { name:'Make it · step', mode:'cook', open:true, ctrls:[
+    { type:'steptoggle', label:'Sample step' },
+    { var:'--pg-cook-size',    label:'Step text size', min:1.1, max:3, step:.01, unit:'rem', def:1.7, css:{sel:'.cook-steptext', prop:'font-size'} },
+    { var:'--pg-cook-lh',      label:'Step line-height', min:1.1, max:1.9, step:.01, unit:'', def:1.45, css:{sel:'.cook-steptext', prop:'line-height'} },
+    { var:'--pg-cook-px',      label:'Step side padding', min:0, max:3.5, step:.05, unit:'rem', def:1.5, css:{sel:'.cook-steptext', prop:'padding-inline'} },
+    { var:'--pg-cook-counter', label:'Step counter size', min:.55, max:1.1, step:.01, unit:'rem', def:.72, css:{sel:'.cook-counter', prop:'font-size'} },
+  ]},
+  { name:'Make it · ingredients & dots', mode:'cook', open:false, ctrls:[
+    { var:'--pg-cook-ing',  label:'Ingredient size', min:.7, max:1.3, step:.01, unit:'rem', def:.9, css:{sel:'.cook-ing', prop:'font-size'} },
+    { var:'--pg-dot-size',  label:'Scrubber dot size', min:5, max:16, step:.5, unit:'px', def:8, css:{sel:'.cook-dots .cd', prop:'width/height'} },
+    { var:'--pg-dot-gap',   label:'Dot spacing', min:4, max:22, step:.5, unit:'px', def:10, css:{sel:'.cook-dots', prop:'gap'} },
+  ]},
+];
+
+const STEP_SHORT = "Cold retard overnight, 12–16 hours at 4°C.";
+const STEP_LONG  = "Bulk ferment about 4 hours at 24°C, giving the dough a set of stretch-and-folds every 30 minutes for the first two hours. You want it to grow roughly 50% in volume, feel airy and alive, and hold a soft dome when you nudge the side of the bowl — this is the step people rush, and rushing it is why a loaf comes out dense. Watch the dough, not the clock.";
+
+const ALL = [];
+const host = document.getElementById('controls');
+
+const cookText = document.getElementById('cookText');
+cookText.textContent = STEP_LONG;   // default to the hard case — a long step
+
+GROUPS.forEach(g=>{
+  const det = document.createElement('details');
+  det.className='grp'; det.dataset.mode = g.mode || 'read'; if(g.open) det.open=true;
+  const sum = document.createElement('summary'); sum.textContent=g.name; det.appendChild(sum);
+  g.ctrls.forEach(c=>{
+    ALL.push(c);
+    const wrap=document.createElement('div'); wrap.className='ctrl';
+    const tgt = c.target || device;
+    if(c.type==='steptoggle'){
+      wrap.innerHTML=`<div class="lbl"><span>${c.label}</span></div>`;
+      const box=document.createElement('div'); box.className='steptoggle';
+      const bl=document.createElement('button'); bl.textContent='Long step'; bl.className='on';
+      const bs=document.createElement('button'); bs.textContent='Short step';
+      bl.onclick=()=>{ cookText.textContent=STEP_LONG; bl.classList.add('on'); bs.classList.remove('on'); };
+      bs.onclick=()=>{ cookText.textContent=STEP_SHORT; bs.classList.add('on'); bl.classList.remove('on'); };
+      box.append(bl,bs); wrap.appendChild(box); det.appendChild(wrap); return;
+    }
+    if(c.type==='color'){
+      wrap.innerHTML=`<div class="lbl"><span>${c.label}</span></div>`;
+      const inp=document.createElement('input'); inp.type='color'; inp.value=c.def;
+      inp.oninput=()=>{ tgt.style.setProperty(c.var,inp.value); };
+      tgt.style.setProperty(c.var,c.def);
+      c.input=inp; wrap.appendChild(inp);
+    } else {
+      wrap.innerHTML=`<div class="lbl"><span>${c.label}</span><span class="val" id="v${ALL.length}"></span></div>`;
+      const inp=document.createElement('input'); inp.type='range';
+      inp.min=c.min; inp.max=c.max; inp.step=c.step; inp.value=c.def;
+      const out=wrap.querySelector('.val');
+      const apply=()=>{ const v=parseFloat(inp.value); tgt.style.setProperty(c.var, v+c.unit); out.textContent=v+c.unit; };
+      inp.oninput=apply; c.input=inp; c.apply=apply; apply();
+      wrap.appendChild(inp);
+    }
+    det.appendChild(wrap);
+  });
+  host.appendChild(det);
+});
+
+/* reset */
+document.getElementById('reset').onclick=()=>{
+  ALL.forEach(c=>{
+    if(!c.input) return;                      // steptoggle has no slider
+    c.input.value=c.def;
+    if(c.type==='color'){ (c.target||device).style.setProperty(c.var,c.def); }
+    else c.apply();
+  });
+};
+
+/* mode switch — reading page ⇄ make it */
+const bRead=document.getElementById('mRead'), bCook=document.getElementById('mCook');
+bRead.onclick=()=>{ document.body.classList.remove('mode-cook'); bRead.classList.add('on'); bCook.classList.remove('on'); };
+bCook.onclick=()=>{ document.body.classList.add('mode-cook'); bCook.classList.add('on'); bRead.classList.remove('on'); };
+if(location.hash==='#cook') bCook.onclick();
+
+/* copy CSS — group changed values by real selector */
+document.getElementById('copy').onclick=async ()=>{
+  const bySel={};
+  ALL.forEach(c=>{
+    if(!c.css) return;
+    const cur = c.type==='color' ? c.input.value : (parseFloat(c.input.value)+c.unit);
+    const def = c.type==='color' ? c.def : (c.def+c.unit);
+    if(cur===def) return; // only emit what you changed
+    (bySel[c.css.sel] ||= []).push(`  ${c.css.prop}: ${cur};`);
+  });
+  let out;
+  const sels=Object.keys(bySel);
+  if(!sels.length){ out='/* Nothing changed yet — move a slider, then Copy CSS. */'; }
+  else{
+    out='/* bakebook recipe page — playground tweaks */\n'+
+        sels.map(s=>`${s} {\n${bySel[s].join('\n')}\n}`).join('\n\n');
+  }
+  try{ await navigator.clipboard.writeText(out); }catch(e){}
+  const btn=document.getElementById('copy'); const t=btn.textContent;
+  btn.textContent='Copied ✓'; setTimeout(()=>btn.textContent=t,1200);
+  console.log(out);
+};
+</script>
+</body>
+</html>

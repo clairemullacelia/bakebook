@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>a recipe on bakebook</title>
+  <link rel="icon" href="wordmark.svg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body { max-width: 560px; margin: 0 auto; min-height: 100vh; min-height: 100dvh; box-sizing: border-box;
+      padding: 0 0 calc(96px + env(safe-area-inset-bottom, 0px)); background: var(--paper); }
+    .topbar { display: flex; align-items: center; justify-content: center; padding: 0.9rem 1rem calc(0.6rem);
+      position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--paper) 88%, transparent); backdrop-filter: blur(6px); }
+    .topbar img { height: 26px; }
+    .wrap { padding: 0.4rem 1.15rem 1rem; }
+    .state { text-align: center; color: var(--muted); padding: 4rem 1.5rem; font-size: 0.95rem; }
+    .hero { width: 100%; aspect-ratio: 4 / 3; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm);
+      background: var(--cream); display: flex; align-items: center; justify-content: center; margin: 0.4rem 0 1rem; }
+    .hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    /* photoless: a compact "lab card" band carrying the faint teal measurement mark (matches home tiles) */
+    .hero.nophoto { aspect-ratio: auto; height: 168px;
+      background: var(--cream) center / auto 92px no-repeat
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%23007E9C' stroke-width='4.5' stroke-linecap='round' opacity='0.20'%3E%3Cpath d='M40 14 V106'/%3E%3Cpath d='M40 40 H84'/%3E%3Cpath d='M40 60 H74'/%3E%3Cpath d='M40 80 H84'/%3E%3C/g%3E%3C/svg%3E"); }
+    .sharedby { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.4px; text-transform: uppercase;
+      color: var(--teal); margin: 0 0 0.35rem; }
+    h1.rtitle { font-family: var(--display); font-weight: 800; font-size: 1.7rem; color: var(--heading); margin: 0 0 0.4rem; letter-spacing: -0.4px; }
+    .cat { display: inline-block; font-family: var(--mono); font-size: 0.72rem; color: var(--teal); background: var(--accent-tint);
+      border-radius: 999px; padding: 0.18rem 0.7rem; margin: 0 0 0.7rem; }
+    .smeta { font-family: var(--mono); font-size: 0.85rem; font-weight: 600; color: var(--ink); margin: 0.35rem 0 0.6rem; }
+    .desc { color: var(--ink); font-size: 0.98rem; line-height: 1.5; margin: 0 0 1.3rem; }
+    .tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0 0 1rem; }
+    .tabs button { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); background: var(--card);
+      border: 1px solid var(--border); border-radius: 999px; padding: 0.32rem 0.85rem; cursor: pointer; }
+    .tabs button.on { color: #fff; background: var(--teal); border-color: var(--teal); }
+    .sec { font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.6px; text-transform: uppercase; color: var(--muted);
+      border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; margin: 1.4rem 0 0.7rem; }
+    .ing { display: flex; gap: 0.6rem; padding: 0.3rem 0; border-bottom: 1px dashed var(--field-line); }
+    .ing .amt { font-family: var(--mono); font-weight: 600; color: var(--teal); min-width: 84px; font-size: 0.9rem; }
+    .ing .nm { color: var(--ink); font-size: 0.95rem; }
+    .ing .nt { display: block; color: var(--muted); font-size: 0.82rem; font-style: italic; margin-top: 0.1rem; }
+    ol.method { margin: 0; padding: 0; list-style: none; counter-reset: step; }
+    ol.method li { counter-increment: step; position: relative; padding: 0.55rem 0 0.55rem 2.1rem; border-bottom: 1px dashed var(--field-line);
+      color: var(--ink); font-size: 0.96rem; line-height: 1.5; }
+    ol.method li::before { content: counter(step); position: absolute; left: 0; top: 0.55rem; font-family: var(--mono); font-weight: 600;
+      font-size: 0.78rem; color: #fff; background: var(--teal); width: 1.4rem; height: 1.4rem; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; }
+    ol.method li .nt { display: block; color: var(--muted); font-size: 0.83rem; font-style: italic; margin-top: 0.2rem; }
+    /* sticky add bar */
+    .addbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 0.8rem 1rem calc(0.8rem + env(safe-area-inset-bottom, 0px));
+      background: color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: blur(8px); border-top: 1px solid var(--border);
+      display: flex; justify-content: center; }
+    .addbar .inner { width: 100%; max-width: 460px; }
+    .addbtn { display: block; width: 100%; font-family: var(--mono); font-weight: 600; font-size: 0.92rem; letter-spacing: 0.3px;
+      color: #fff; background: var(--teal); border: none; border-radius: 999px; padding: 0.8rem 1rem; cursor: pointer;
+      box-shadow: 0 4px 14px rgba(0,126,156,.28); }
+    .addbtn:hover { background: var(--teal-dark); }
+    .addbtn:disabled { opacity: 0.6; cursor: default; }
+    .addhint { text-align: center; color: var(--muted); font-size: 0.78rem; margin: 0.5rem 0 0; }
+    /* auth overlay (sign up to save) */
+    .auth-scrim { position: fixed; inset: 0; z-index: 30; background: rgba(30,23,20,.5); display: none; align-items: center; justify-content: center; padding: 1.1rem; }
+    .auth-scrim.on { display: flex; }
+    .auth-card { width: 100%; max-width: 360px; box-sizing: border-box; text-align: center; background: var(--card);
+      border-radius: 16px; padding: 1.8rem 1.5rem 1.5rem; box-shadow: 0 16px 50px rgba(30,23,20,.28); }
+    .auth-card img.logo { height: 30px; margin: 0 auto 0.5rem; display: block; }
+    .auth-h { font-family: var(--display); font-weight: 800; font-size: 1.15rem; color: var(--heading); margin: 0.3rem 0 0.2rem; }
+    .auth-sub { color: var(--muted); font-size: 0.86rem; margin: 0 0 1.1rem; line-height: 1.4; }
+    .auth-err { color: var(--danger); font-size: 0.82rem; min-height: 1.1em; margin: 0 0 0.4rem; }
+    .auth-field { display: flex; align-items: center; background: #fff; border: 1px solid var(--field-line); border-radius: 999px;
+      padding: 0.44rem 0.95rem; margin: 0 0 0.55rem; }
+    .auth-field:focus-within { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(0,126,156,.12); }
+    .auth-field input { flex: 1; min-width: 0; border: none; outline: none; background: none; padding: 0; font-size: 1rem; color: var(--ink); }
+    .auth-primary { display: block; width: 100%; margin: 0.6rem 0 0.7rem; font-family: var(--mono); font-weight: 600; font-size: 0.82rem;
+      color: #fff; background: var(--teal); border: none; border-radius: 999px; padding: 0.55rem 1rem; cursor: pointer; }
+    .auth-primary:hover { background: var(--teal-dark); }
+    .auth-social { display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; background: #FFFEFB;
+      border: 1px solid var(--field-line); border-radius: 999px; padding: 0.5rem 1rem; font-size: 0.9rem; color: var(--ink); cursor: pointer; }
+    .auth-switch { font-size: 0.9rem; color: var(--ink); margin: 1rem 0 0; }
+    .auth-switch a { color: var(--teal); font-weight: 700; cursor: pointer; text-decoration: underline; }
+    .auth-close { position: absolute; top: 0.7rem; right: 0.9rem; background: none; border: none; font-size: 1.3rem; color: var(--muted); cursor: pointer; line-height: 1; }
+    .auth-card { position: relative; }
+  </style>
+</head>
+<body>
+  <div class="topbar"><a href="index.html"><img src="wordmark.svg" alt="bakebook"></a></div>
+
+  <div id="loading" class="state">loading recipe…</div>
+  <div id="gone" class="state" style="display:none">this shared recipe isn’t available anymore.<br>the link may have been removed.</div>
+
+  <div id="view" class="wrap" style="display:none">
+    <div class="hero" id="hero"></div>
+    <p class="sharedby" id="sharedby"></p>
+    <h1 class="rtitle" id="rtitle"></h1>
+    <span class="cat" id="cat" style="display:none"></span>
+    <div class="smeta" id="smeta" style="display:none"></div>
+    <p class="desc" id="desc" style="display:none"></p>
+    <div class="tabs" id="tabs" style="display:none"></div>
+    <div id="body"></div>
+  </div>
+
+  <div class="addbar" id="addbar" style="display:none">
+    <div class="inner">
+      <button class="addbtn" id="addbtn">add to my bakebook</button>
+      <p class="addhint" id="addhint">save this recipe to develop &amp; store your own version</p>
+    </div>
+  </div>
+
+  <!-- sign-up-to-save overlay -->
+  <div class="auth-scrim" id="authScrim">
+    <div class="auth-card">
+      <button class="auth-close" id="authClose" aria-label="close">×</button>
+      <img class="logo" src="wordmark.svg" alt="bakebook">
+      <h2 class="auth-h">save this recipe</h2>
+      <p class="auth-sub">create a free bakebook account (or log in) to add this recipe to your own book.</p>
+      <p class="auth-err" id="authErr"></p>
+      <label class="auth-field"><input id="authEmail" type="email" placeholder="e-mail" autocomplete="email"></label>
+      <label class="auth-field"><input id="authPw" type="password" placeholder="password" autocomplete="current-password"></label>
+      <label class="auth-field" id="authConfirmField"><input id="authConfirm" type="password" placeholder="confirm password" autocomplete="new-password"></label>
+      <button class="auth-primary" id="authPrimary">create account &amp; save</button>
+      <button class="auth-social" id="authGoogle">
+        <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        continue with Google
+      </button>
+      <p class="auth-switch"><span id="authSwitchText">already have an account? </span><a id="authToggle">log in</a></p>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+  <script src="firebase-init.js"></script>
+  <script src="bakebook-events.js"></script>   <!-- the event log: what people do, never what they wrote -->
+  <!-- the same sync code every other page uses. Without it, this page wrote the added recipe into the
+       browser's copy without saying whose copy it was, and on a browser bakebook had never seen, the
+       recipe page wiped it as "another account's data" before it reached the cloud (fixed 28 Sep 2026). -->
+  <script src="bakebook-store.js"></script>
+  <script>
+    const MARK = "brand-mark.svg";
+    const params = new URLSearchParams(location.search);
+    const shareId = params.get("s") || "";
+    let snap = null;                 // the loaded share doc
+    let activeComp = 0;
+
+    const $ = function (id) { return document.getElementById(id); };
+    function esc(s) { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
+
+    // ---------- load + render ----------
+    if (!shareId) { showGone(); }
+    else {
+      firebase.firestore().collection("shares").doc(shareId).get().then(function (doc) {
+        if (!doc.exists) { showGone(); return; }
+        snap = doc.data(); render();
+      }).catch(function (e) { console.error("share load failed", e); showGone(); });
+    }
+
+    function showGone() { $("loading").style.display = "none"; $("gone").style.display = "block"; }
+
+    function render() {
+      $("loading").style.display = "none";
+      $("view").style.display = "block";
+      $("addbar").style.display = "flex";
+      document.title = (snap.name || "a recipe") + " · bakebook";
+
+      // hero
+      const hero = $("hero");
+      if (snap.photos && snap.photos.length) {
+        const img = document.createElement("img"); img.src = snap.photos[0]; img.alt = snap.name || ""; hero.appendChild(img);
+      } else {
+        hero.classList.add("nophoto");   // compact branded band with the faint teal mark (CSS background)
+      }
+      $("sharedby").textContent = "shared by " + (snap.ownerName || "a baker");
+      $("rtitle").textContent = snap.name || "untitled recipe";
+      if (snap.category) { const c = $("cat"); c.textContent = snap.category; c.style.display = "inline-block"; }
+      const mbits = [];
+      if (snap.time) mbits.push(String(snap.time).trim());
+      if (snap.servings) { const sv = String(snap.servings).trim(); mbits.push(/^(makes|serves|yield|for )/i.test(sv) ? sv : "makes " + sv); }
+      if (mbits.length) { const m = $("smeta"); m.textContent = mbits.join("  ·  "); m.style.display = "block"; }
+      if (snap.description) { const d = $("desc"); d.textContent = snap.description; d.style.display = "block"; }
+
+      const comps = (snap.components && snap.components.length) ? snap.components : [{ name: "", ingredients: [], steps: [], stepNotes: [] }];
+      if (comps.length > 1) {
+        const tabs = $("tabs"); tabs.style.display = "flex"; tabs.innerHTML = "";
+        comps.forEach(function (c, i) {
+          const b = document.createElement("button"); b.textContent = c.name || ("part " + (i + 1));
+          if (i === activeComp) b.className = "on";
+          b.addEventListener("click", function () { activeComp = i; renderBody(comps); Array.prototype.forEach.call(tabs.children, function (x, j) { x.className = j === i ? "on" : ""; }); });
+          tabs.appendChild(b);
+        });
+      }
+      renderBody(comps);
+    }
+
+    function renderBody(comps) {
+      const c = comps[activeComp] || comps[0];
+      const body = $("body"); body.innerHTML = "";
+      // ingredients
+      if (c.ingredients && c.ingredients.length) {
+        const h = document.createElement("div"); h.className = "sec"; h.textContent = "ingredients"; body.appendChild(h);
+        c.ingredients.forEach(function (ing) {
+          const row = document.createElement("div"); row.className = "ing";
+          const amt = (ing.amount != null && ing.amount !== "") ? (ing.amount + (ing.unit && ing.unit !== "each" ? " " + ing.unit : "")) : "";
+          const a = document.createElement("span"); a.className = "amt"; a.textContent = amt;
+          const n = document.createElement("span"); n.className = "nm"; n.innerHTML = esc(ing.name) + (ing.note ? '<span class="nt">' + esc(ing.note) + '</span>' : "");
+          row.appendChild(a); row.appendChild(n); body.appendChild(row);
+        });
+      }
+      // method
+      const steps = (c.steps || []).filter(function (s) { return s && String(s).trim(); });
+      if (steps.length) {
+        const h = document.createElement("div"); h.className = "sec"; h.textContent = "method"; body.appendChild(h);
+        const ol = document.createElement("ol"); ol.className = "method";
+        (c.steps || []).forEach(function (s, i) {
+          if (!s || !String(s).trim()) return;
+          const li = document.createElement("li");
+          li.innerHTML = esc(s) + ((c.stepNotes && c.stepNotes[i]) ? '<span class="nt">' + esc(c.stepNotes[i]) + '</span>' : "");
+          ol.appendChild(li);
+        });
+        body.appendChild(ol);
+      }
+    }
+
+    // ---------- add to my bakebook (gate at ADD) ----------
+    function genId() {
+      return "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    }
+    // Wait until the sync code has signed this browser's copy over to the signed-in account (and cleared
+    // any other account's data from it), then add. If that takes too long (a bad connection), add anyway:
+    // the owner is recorded the moment sign-in lands, so the recipe page keeps the recipe and uploads it.
+    function doAdd() {
+      if (!snap) return;
+      $("addhint").textContent = "saving to your bakebook…";
+      let done = false;
+      const once = function () { if (!done) { done = true; addNow(); } };
+      if (window.bakebookWhenReady) { bakebookWhenReady(once); setTimeout(once, 12000); } else { once(); }
+    }
+    function addNow() {
+      const newId = genId();
+      const comps = (snap.components && snap.components.length ? snap.components : [{ name: "", ingredients: [], steps: [], stepNotes: [] }])
+        .map(function (c) {
+          return {
+            name: String(c.name || ""),
+            ingredients: (c.ingredients || []).map(function (i) { return Object.assign({}, i); }),
+            steps: (c.steps || []).slice(),
+            stepNotes: (c.stepNotes || []).slice()
+          };
+        });
+      const first = comps[0];
+      const rec = {
+        id: newId,
+        name: snap.name || "untitled recipe",
+        description: snap.description || "",
+        category: snap.category || "",
+        time: snap.time || "",
+        servings: snap.servings || "",
+        components: comps,
+        ingredients: (first.ingredients || []).slice(),
+        steps: (first.steps || []).slice(),
+        stepNotes: (first.stepNotes || []).slice(),
+        photos: (snap.photos || []).slice(),
+        logs: [],
+        // where this recipe came from, so a later "adapted from" line or lineage view has the link.
+        // Only recorded from 28 Sep 2026; copies added before then have no source.
+        source: {
+          kind: "share",
+          shareId: shareId,
+          ownerUid: snap.ownerUid || "",
+          ownerName: snap.ownerName || "",
+          name: snap.name || "",
+          addedAt: Date.now()
+        },
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+      // same-origin localStorage: recipe.html reads this instantly; the store then syncs it to the cloud.
+      let arr = []; try { arr = JSON.parse(localStorage.getItem("bakebook.recipes")) || []; } catch (e) {}
+      arr.push(rec);
+      try { localStorage.setItem("bakebook.recipes", JSON.stringify(arr)); } catch (e) {}
+      if (window.bbLog) bbLog("recipe_created", { recipeId: newId, kind: "share" });
+      // remember the category too
+      if (rec.category) {
+        let cats = []; try { cats = JSON.parse(localStorage.getItem("bakebook.categories")) || []; } catch (e) {}
+        if (cats.indexOf(rec.category) === -1) { cats.push(rec.category); try { localStorage.setItem("bakebook.categories", JSON.stringify(cats)); } catch (e) {} }
+      }
+      // upload before leaving, so the recipe is in the cloud even if the next page never finishes loading
+      const go = function () { location.href = "recipe.html?id=" + encodeURIComponent(newId); };
+      if (window.bakebookFlush) { bakebookFlush().then(go, go); } else { go(); }
+    }
+
+    $("addbtn").addEventListener("click", function () {
+      const u = firebase.auth().currentUser;
+      if (u) { $("addbtn").disabled = true; doAdd(); }
+      else { openAuth(); }
+    });
+
+    // ---------- auth overlay ----------
+    let authMode = "signup";   // default to sign-up: most link visitors are new
+    function openAuth() { $("authScrim").classList.add("on"); setTimeout(function () { $("authEmail").focus(); }, 50); }
+    function closeAuth() { $("authScrim").classList.remove("on"); }
+    $("authClose").addEventListener("click", closeAuth);
+    $("authScrim").addEventListener("click", function (e) { if (e.target === $("authScrim")) closeAuth(); });
+
+    function setAuthMode(m) {
+      authMode = m;
+      const signup = m === "signup";
+      $("authConfirmField").style.display = signup ? "flex" : "none";
+      $("authPrimary").textContent = signup ? "create account & save" : "log in & save";
+      $("authSwitchText").textContent = signup ? "already have an account? " : "new to bakebook? ";
+      $("authToggle").textContent = signup ? "log in" : "sign up";
+      $("authErr").textContent = "";
+    }
+    $("authToggle").addEventListener("click", function () { setAuthMode(authMode === "signup" ? "login" : "signup"); });
+
+    function authError(e) {
+      let m = (e && e.message) ? e.message : String(e);
+      m = m.replace(/^Firebase:\s*/, "").replace(/\s*\(auth\/[^)]*\)\.?$/, "");
+      $("authErr").textContent = m;
+    }
+    $("authPrimary").addEventListener("click", function () {
+      const email = $("authEmail").value.trim(), pw = $("authPw").value;
+      $("authErr").textContent = "";
+      if (!email || !pw) { $("authErr").textContent = "enter your email and password."; return; }
+      const auth = firebase.auth();
+      if (authMode === "signup") {
+        if (pw !== $("authConfirm").value) { $("authErr").textContent = "passwords don't match."; return; }
+        auth.createUserWithEmailAndPassword(email, pw)
+          .then(function (cred) {
+            // confirmation email (the home screen reminds them until they confirm). A failed send never blocks sign-up.
+            const u = cred.user;
+            u.sendEmailVerification({ url: "https://bakebook.co/" }).catch(function (e) {
+              const code = e && e.code || "";
+              if (code === "auth/unauthorized-continue-uri" || code === "auth/invalid-continue-uri") return u.sendEmailVerification();
+            }).catch(function () {});
+          })
+          .catch(authError);
+      } else {
+        auth.signInWithEmailAndPassword(email, pw).catch(authError);
+      }
+    });
+    // In sign-up, Enter on the password moves on to the confirm box instead of submitting a half-filled form.
+    $("authPw").addEventListener("keydown", function (e) {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      if (authMode === "signup") $("authConfirm").focus(); else $("authPrimary").click();
+    });
+    $("authConfirm").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); $("authPrimary").click(); } });
+    // One popup at a time, same as the home screen: a second tap while Google's window is open makes Firebase
+    // cancel the first. The button is held down until the first attempt settles; a closed popup is not an error.
+    let popupPending = false;
+    $("authGoogle").addEventListener("click", function () {
+      if (popupPending) return;
+      popupPending = true; $("authGoogle").disabled = true;
+      $("authErr").textContent = "";
+      firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider())
+        .catch(function (e) {
+          const code = e && e.code || "";
+          if (code === "auth/cancelled-popup-request" || code === "auth/popup-closed-by-user") return;
+          authError(e);
+        })
+        .finally(function () { popupPending = false; $("authGoogle").disabled = false; });
+    });
+
+    // when auth succeeds (any method), complete the pending add
+    let addedAfterAuth = false;
+    firebase.auth().onAuthStateChanged(function (u) {
+      if (u && $("authScrim").classList.contains("on") && !addedAfterAuth) {
+        addedAfterAuth = true; closeAuth(); $("addbtn").disabled = true; doAdd();
+      }
+    });
+  </script>
+</body>
+</html>

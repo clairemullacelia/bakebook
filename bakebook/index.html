@@ -12,26 +12,40 @@
   <style>
     /* body IS the full-height container: box-sizing:border-box absorbs the safe-area padding into
        100dvh (so the page never exceeds the screen) and flex-column lets the footer pin to the bottom. */
-    body { margin: 0 auto; max-width: 480px; box-sizing: border-box; min-height: 100vh; min-height: 100dvh;
+    /* Proper STICKY FOOTER: body is min 100dvh and the footer (.applegal) uses margin-top:auto, so the
+       leftover screen height collapses into the gap ABOVE the footer (pinning it to the bottom) instead of
+       dumping below it. A tall recipe grid grows the body past 100dvh and the page just scrolls, footer last.
+       (Earlier bug: min-height WITHOUT margin-top:auto left the empty band BELOW the footer — don't remove
+       the margin-top:auto below.) html carries the cream so the ground reads seamlessly. */
+    html { background: var(--paper); }
+    body { margin: 0 auto; max-width: 480px; box-sizing: border-box; min-height: 100dvh;
       display: flex; flex-direction: column;
-      padding: calc(1.5rem + env(safe-area-inset-top, 0px)) 1.5rem calc(1.5rem + env(safe-area-inset-bottom, 0px)); }
+      padding: calc(1.5rem + env(safe-area-inset-top, 0px)) 1.5rem calc(0.5rem + env(safe-area-inset-bottom, 0px)); }
     h1 { text-align: center; font-size: 1.65rem; margin: 0.15rem 0 0.05rem; }   /* smaller, more subtle wordmark on the home pages */
     .tagline { text-align: center; color: var(--terracotta-deep); margin: 0 0 1.1rem; font-size: 0.82rem; }
+    .tagline .bake { color: var(--warm); font-weight: 600; }
 
     input, select, textarea { width: 100%; box-sizing: border-box; padding: 0.45rem 0.8rem;
       border: 1px solid var(--field-line); border-radius: 10px; font-size: 1rem; font-family: inherit;
       background: var(--card); color: var(--ink); }
     .controls { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    /* "confirm your email" reminder: a quiet strip at the top of home, in the page flow (not a toast) */
+    .confirm-nudge { display: flex; align-items: center; gap: 0.55rem; margin: 0 0 0.8rem; padding: 0.45rem 0.55rem 0.45rem 0.75rem;
+      background: var(--cream); border-radius: var(--radius); font-size: 0.78rem; line-height: 1.35; color: var(--ink); }
+    .confirm-nudge .confirm-msg { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .confirm-nudge button { flex: 0 0 auto; font-family: var(--mono); font-size: 0.68rem; font-weight: 600; color: var(--teal);
+      background: var(--card); border: 1px solid var(--field-line); border-radius: 999px; padding: 0.27rem 0.63rem; cursor: pointer; white-space: nowrap; }
+    .confirm-nudge button:disabled { opacity: 0.6; cursor: default; }
     .controls .search { flex: 1; }
     .controls .sort { flex: 0 0 9.5rem; }   /* fixed width so the search bar never resizes when the sort label changes */
     .controls .sort .sel-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     button.primary { padding: 0.4rem 1rem; font-size: 0.9rem; font-weight: 700; letter-spacing: 0.2px; color: var(--paper);
       background: var(--terracotta-deep); border: none; border-radius: 999px; cursor: pointer;
-      box-shadow: 0 3px 10px rgba(165,83,63,.30);
+      box-shadow: 0 3px 10px rgba(0,126,156,.30);
       transition: transform .12s ease, box-shadow .12s ease; }
-    button.primary:hover { background: #8F4634; transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(165,83,63,.38); }
+    button.primary:hover { background: #00647C; transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(0,126,156,.38); }
     .newbtn-wrap { text-align: center; margin: 0.5rem 0 1.5rem; }
 
     /* create form */
@@ -49,32 +63,43 @@
     #createForm { padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px)); }
     #saveButton { position: fixed; left: 50%; transform: translateX(-50%); z-index: 260;
       bottom: calc(0.9rem + env(safe-area-inset-bottom, 0px)); width: calc(100% - 3rem); max-width: 432px;
-      box-shadow: 0 6px 22px rgba(90,50,30,.30); }
-    .createback { background: none; border: none; color: var(--terracotta-deep); font-size: 0.95rem;
-      cursor: pointer; padding: 0.45rem 0.6rem 0.45rem 0; margin-bottom: 0.5rem; }
+      box-shadow: 0 6px 22px rgba(30,23,20,.30); }
+    /* the add-recipe form's "home" — the bare b+mark icon, top-right (matches the deep pages) */
+    .createback { position: fixed; top: calc(0.55rem + env(safe-area-inset-top, 0px)); right: 0.95rem; z-index: 140;
+      background: none; border: none; padding: 0.3rem; cursor: pointer; -webkit-tap-highlight-color: transparent;
+      display: flex; align-items: center; justify-content: center; }
+    .createback img { height: 1.5rem; width: auto; display: block; }
+    .createback:active { opacity: 0.6; }
     .import-btn { display: block; width: 100%; margin: 0 0 0.5rem; padding: 0.48rem; font-weight: 700; font-size: 0.92rem;
       color: var(--terracotta-deep); background: var(--card); border: 1.5px solid var(--terracotta); border-radius: 999px; cursor: pointer; }
     .import-btn:hover { background: var(--cream); }
     .import-link-btn { margin-top: 0.4rem; }   /* a little breathing room from the photo-import button above */
     .import-url { margin: 0.1rem 0 0.5rem; }
     .import-hint { font-size: 0.82rem; color: var(--muted); font-style: italic; margin: 0 0 1rem; min-height: 1.1em; }
-    label { display: block; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    /* optional time · makes — one light inline meta line right under the recipe name */
+    .tvrow { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.3rem 1.4rem; margin: 0.5rem 0 1rem; }
+    .tvlbl { font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); }
+    label { display: block; font-weight: 700; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em;
       color: var(--muted); margin: 1rem 0 0.35rem; }
-    .section-title { font-family: var(--display); font-weight: 800; font-size: 1.15rem; color: var(--accent);
-      letter-spacing: -0.2px; border-top: 1px solid var(--border); padding-top: 1.1rem; margin: 1.6rem 0 0.7rem; }
+    .section-title { font-family: var(--mono); font-weight: 700; font-size: 1rem; text-transform: uppercase; color: var(--heading);
+      letter-spacing: 0.13em; border-top: 1px solid var(--border); padding-top: 1.1rem; margin: 1.6rem 0 0.7rem; }
     .builder-row { display: flex; align-items: center; gap: 0.5rem; background: var(--card);
       border: 1px solid var(--field-line); border-radius: 10px; padding: 0.5rem 0.75rem; margin-bottom: 0.5rem; }
     .builder-row span { flex: 1; }
     .remove { background: none; color: var(--danger); border: none; font-size: 1.2rem; cursor: pointer; padding: 0 0.25rem; line-height: 1; }
-    .inline { display: flex; gap: 0.5rem; }
-    .inline .amount { flex: 0 0 4.5rem; } .inline .unit { flex: 0 0 5rem; } .inline .iname { flex: 1; }
+    .inline { display: flex; gap: 0.5rem; align-items: center; }
+    .step-row { margin-top: 0.5rem; align-items: flex-end; }   /* the + sits on the last line while the box grows */
+    .step-row textarea { flex: 1; display: block; }   /* block: no inline descender gap pushing the + below the box */
+    .inline .iname { flex: 1; } .inline .unit { flex: 0 0 5rem; } .inline .unit .sel, .inline .unit .sel-btn { width: 100%; } .inline .amount { flex: 0 0 6.2rem; }
     button.small { padding: 0.32rem 0.85rem; font-size: 0.86rem; font-weight: 700; color: var(--terracotta-deep); background: transparent; border: 1.5px solid var(--terracotta); border-radius: 999px; cursor: pointer; }
     button.small:hover { background: var(--cream); }
-    .lib-card { border: 1px solid var(--border); border-radius: 10px; padding: 0.45rem 0.4rem; background: var(--paper);
+    .lib-card { border: 1px solid var(--border); border-radius: 10px; padding: 0.45rem 0.4rem; background: var(--card);
       display: flex; flex-direction: column; gap: 0.4rem; }
     .lib-name { font-weight: 600; font-size: 0.92rem; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .lib-controls { display: flex; align-items: center; justify-content: space-between; gap: 0.2rem; }
-    .lib-card .wheel { width: 2.5rem; height: 2.4rem; }
+    .lib-card .wheel { width: 2.8rem; height: 2.4rem; }
+    .inline .wheel.amount, .inline .amount .wheel { width: 100%; height: 2.25rem; }   /* the + ingredient row and a row being edited; 2.25rem + border = the 38px inputs beside it */
+    .wheel.blank .wheel-val { font-weight: 400; font-size: 1rem; color: #9C9C9C; }   /* same grey as the input placeholders beside it */
     .lib-card .sel-btn { padding: 0.35rem 0.4rem; font-size: 0.9rem; gap: 0.2rem; }
     .lib-card .lib-unit { flex: 0 0 auto; }
     /* iOS-style amount wheel: flick up to increase, down to decrease */
@@ -84,14 +109,40 @@
       cursor: ns-resize; touch-action: none; user-select: none; -webkit-user-select: none;
       transition: transform .12s ease; }
     /* while scrolling/dragging: enlarge slightly + light up a bar across the current amount */
-    .wheel.grabbing { border-color: var(--terracotta); box-shadow: 0 0 0 3px rgba(190,111,93,.15); transform: scale(1.16); }
+    .wheel.grabbing { border-color: var(--terracotta); box-shadow: 0 0 0 3px rgba(0,126,156,.15); }   /* the widened strip covers it now, so no scale-up */
     .wheel .wheel-val { font-weight: 700; font-size: 1rem; color: var(--ink); line-height: 1.05;
       align-self: stretch; text-align: center; border-radius: 3px; }
-    .wheel.grabbing .wheel-val { background: rgba(190,111,93,.22); }
+    .wheel.grabbing .wheel-val { background: rgba(0,126,156,.22); }
     .wheel .wheel-ghost { font-size: 0.7rem; color: var(--muted); opacity: 0.5; line-height: 1.05; }
     .wheel::before, .wheel::after { content: ""; position: absolute; left: 0; right: 0; height: 0.7rem; pointer-events: none; z-index: 1; }
     .wheel::before { top: 0; background: linear-gradient(var(--card), rgba(255,252,247,0)); }
     .wheel::after { bottom: 0; background: linear-gradient(rgba(255,252,247,0), var(--card)); }
+    /* the readout that floats above the wheel while it turns, so a thumb never hides the number */
+    .wheel-bubble { position: fixed; z-index: 3500; transform: translate(-50%, -100%); pointer-events: none;
+      background: rgba(255, 252, 247, 0.62); -webkit-backdrop-filter: blur(16px) saturate(1.5); backdrop-filter: blur(16px) saturate(1.5);
+      border: 1px solid rgba(255, 255, 255, 0.75); color: var(--ink); font-family: var(--mono); font-weight: 700; font-size: 1.25rem;
+      padding: 0.45rem 0.9rem; border-radius: 14px; white-space: nowrap;
+      box-shadow: 0 8px 24px rgba(30,23,20,.16), inset 0 1px 0 rgba(255,255,255,.7);
+      opacity: 0; transition: opacity .12s ease; }
+    .wheel-bubble.show { opacity: 1; }
+    /* the box grown a little taller while it turns: one row above, one below; the list slides, the band stays */
+    .wheel-col { position: fixed; z-index: 3490; transform: translateX(-50%); pointer-events: none; box-sizing: border-box;
+      background: var(--card); border: 1.5px solid var(--terracotta); border-radius: 10px;
+      box-shadow: 0 0 0 3px rgba(0,126,156,.15), 0 8px 22px rgba(30,23,20,.14);
+      font-family: var(--mono); white-space: nowrap; opacity: 0; transition: opacity .1s ease;
+      touch-action: none; user-select: none; -webkit-user-select: none; }
+    .wheel-col.show { opacity: 1; pointer-events: auto; cursor: ns-resize; }
+    /* an invisible margin around the column: a finger that lands a little outside still drives the wheel */
+    .wheel-col.show::before { content: ""; position: absolute; inset: -28px -24px; }
+    .wheel-col-list { will-change: transform; }
+    .wheel-col-clip { position: absolute; inset: 0; overflow: hidden; border-radius: 8px; }
+    .wheel-col-list div { height: var(--row); line-height: var(--row); text-align: center; color: var(--muted); font-size: 0.95rem; opacity: 0.6; }
+    .wheel-col-list div.on { color: var(--ink); font-weight: 700; font-size: 1.1rem; opacity: 1; }
+    .wheel-col-band { position: absolute; left: 4px; right: 4px; top: var(--row); height: var(--row); border-radius: 6px;
+      background: rgba(0,126,156,.16); pointer-events: none; }
+    .wheel-col-clip::before, .wheel-col-clip::after { content: ""; position: absolute; left: 0; right: 0; height: calc(var(--row) * 0.6); pointer-events: none; z-index: 1; }
+    .wheel-col-clip::before { top: 0; background: linear-gradient(var(--card), rgba(255,252,247,0)); }
+    .wheel-col-clip::after { bottom: 0; background: linear-gradient(rgba(255,252,247,0), var(--card)); }
     .wheel.editing { border-color: var(--terracotta); }
     .wheel.editing .wheel-val, .wheel.editing .wheel-ghost { display: none; }
     .wheel-edit { width: 2.8rem; text-align: center; border: none; background: transparent; padding: 0;
@@ -102,10 +153,18 @@
     .lib-unit { width: auto; padding: 0.35rem; }
     .lib-add { flex: 0 0 auto; width: 2rem; height: 2rem; padding: 0; font-weight: 700; font-size: 1.15rem; line-height: 1;
       background: var(--terracotta-deep); color: var(--paper); border: none; border-radius: 50%; cursor: pointer; }
+    /* the library is its own scroll box — give it a clear bordered, tinted container so it reads as a
+       separate scroll area (users were getting stuck scrolling it, thinking it was the page). */
     .lib-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem;
-      max-height: 320px; overflow-y: auto; margin-top: 0.5rem; padding-right: 0.25rem; }
+      max-height: 320px; overflow-y: auto; margin-top: 0.5rem;
+      padding: 0.6rem; border: 1px solid var(--border); border-radius: 12px; background: var(--paper); }   /* option 5 on the library canvas (Claire, 2026-09-12): no fill, a hairline */
     .lib-amt { touch-action: none; }
-    button.save { display: block; width: 100%; margin-top: 1.25rem; padding: 0.62rem; font-size: 0.98rem; font-weight: 700; letter-spacing: 0.2px; color: var(--paper); background: var(--terracotta-deep); border: none; border-radius: 999px; cursor: pointer; box-shadow: 0 3px 10px rgba(165,83,63,.28); }
+    /* the library is folded away until tapped, so the form stays short */
+    .lib-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; background: none;
+      border-left: none; border-right: none; border-bottom: none; cursor: pointer; text-align: left; padding-left: 0; padding-right: 0; padding-bottom: 0; }
+    .lib-caret { color: var(--terracotta-deep); font-size: 0.9rem; transition: transform .18s ease; }
+    .lib-toggle[aria-expanded="true"] .lib-caret { transform: rotate(180deg); }
+    button.save { display: block; width: 100%; margin-top: 1.25rem; padding: 0.62rem; font-size: 0.98rem; font-weight: 700; letter-spacing: 0.2px; color: var(--paper); background: var(--terracotta-deep); border: none; border-radius: 999px; cursor: pointer; box-shadow: 0 3px 10px rgba(0,126,156,.28); }
 
     /* recipe cards */
     a.recipe-card { display: block; text-decoration: none; color: inherit; background: var(--card);
@@ -118,17 +177,17 @@
     .tile-photo { width: 100%; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden; box-shadow: var(--shadow-sm);
       background: linear-gradient(135deg, var(--butter-pale), var(--tan)); display: flex; align-items: center; justify-content: center; }
     .tile-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .tile-photo .ph { font-family: var(--display); font-weight: 600; font-size: 1.9rem; color: rgba(58,42,32,.6);
-      text-shadow: 0 1px 0 rgba(255,252,247,.65); }
+    .tile-photo .ph { font-family: var(--mono); font-weight: 600; font-size: 2.3rem; color: var(--teal);
+      position: relative; z-index: 1; text-shadow: 0 1px 0 rgba(255,255,255,.55); }
     .tile-title { font-weight: 700; font-size: 0.76rem; color: var(--heading); text-align: center; line-height: 1.2; margin-top: 0.35rem;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .tile-meta { margin-top: 0.15rem; font-size: 0.68rem; color: var(--accent); font-weight: 700; text-align: center; }
+    .tile-meta { margin-top: 0.15rem; font-family: var(--mono); font-size: 0.66rem; color: var(--teal-dark); font-weight: 600; text-align: center; letter-spacing: 0.02em; }
     a.recipe-tile:hover .tile-photo { box-shadow: var(--shadow); }
     .meta { color: var(--terracotta-deep); font-size: 0.85rem; margin: 0; }
     .empty { text-align: center; color: var(--terracotta-deep); font-style: italic; padding: 1rem; }
     /* first-run onboarding card (shown only when the account has no recipes yet) */
     .onboard { text-align: center; max-width: 22rem; margin: 1.5rem auto 0; padding: 1.4rem 1.2rem;
-      background: var(--card); border: 1px solid #EFE7CB; border-radius: 16px; box-shadow: 0 4px 14px rgba(58,42,32,.07); }
+      background: var(--card); border: 1px solid #EFE7CB; border-radius: 16px; box-shadow: 0 4px 14px rgba(30,23,20,.07); }
     .onboard-h { margin: 0 0 0.5rem; font-size: 1.2rem; color: var(--ink); }
     .onboard-p { margin: 0 0 1.1rem; font-size: 0.9rem; color: var(--terracotta-deep); line-height: 1.55; }
     .onboard .primary { margin: 0 auto 0.6rem; }
@@ -148,7 +207,7 @@
     .trash-zone.hot { background: var(--danger); color: #fff; border-style: solid; transform: translateX(-50%) translateY(0) scale(1.14); }
     .trash-zone.hot svg { stroke: #fff; }
     .drag-ghost { position: fixed; z-index: 2999; border-radius: 10px; pointer-events: none; overflow: hidden;
-      box-shadow: 0 12px 30px rgba(40,25,15,.35); opacity: .94; transform: scale(1.06); transition: opacity .1s, transform .1s; }
+      box-shadow: 0 12px 30px rgba(30,23,20,.35); opacity: .94; transform: scale(1.06); transition: opacity .1s, transform .1s; }
     .drag-ghost.doomed { opacity: .55; transform: scale(.82); }
     .recipe-tile.lifting { opacity: .3; }
     /* while a drag is possible, stop the browser's OWN behaviors from fighting ours: no text-selection,
@@ -158,26 +217,29 @@
     /* butter — a small round floating helper button, matching the one on the recipe page */
     .butter-fab { position: fixed; left: 1rem; bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); z-index: 90;
       width: 3.15rem; height: 3.15rem; border-radius: 50%; padding: 0; text-decoration: none;
-      background: var(--card); border: 1px solid #EFE7CB; box-shadow: 0 4px 14px rgba(58,42,32,.16); cursor: grab;
+      background: var(--card); border: 2px solid var(--accent); box-shadow: 0 0 0 2px rgba(0,126,156,.10), 0 4px 15px rgba(0,126,156,.26); cursor: grab;
       display: flex; align-items: center; justify-content: center;
       touch-action: none; -webkit-user-select: none; user-select: none; -webkit-user-drag: none;
       transition: left .22s cubic-bezier(.22,1,.36,1), top .22s cubic-bezier(.22,1,.36,1), transform .22s cubic-bezier(.22,1,.36,1), opacity .18s ease; }
-    .butter-fab:hover { border-color: var(--terracotta); background: #FFFDF7; }
-    .butter-fab.dragging { transition: none; cursor: grabbing; box-shadow: 0 8px 22px rgba(58,42,32,.26); }
+    @media (hover: hover) { .butter-fab:hover { border-color: var(--teal-dark); } }   /* pointer-only: no sticky cream bg after a tap on touch */
+    .butter-fab.dragging { transition: none; cursor: grabbing; box-shadow: 0 8px 22px rgba(30,23,20,.26); }
     .butter-fab.tucked { opacity: .5; }
     .butter-fab.tucked:hover { opacity: 1; }
     .butter-fab.tuck-left { transform: translateX(-62%); }
     .butter-fab.tuck-right { transform: translateX(62%); }
     .butter-fab img { height: 1.7rem; width: 1.7rem; display: block; pointer-events: none; -webkit-user-drag: none; }
+    /* first-run coach bounce: flash butter until the baker sends their first message (any page). Cleared account-wide via bakebook.coach2.butter — same flag recipe.html uses. */
+    .butter-fab.coach-flash { outline: 2.5px solid var(--terracotta); outline-offset: 3px; animation: coachBounce 1.15s ease-in-out infinite; }
+    @keyframes coachBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
     /* the footer below handles bottom spacing now, so only a small gap here */
     #recipeList { padding-bottom: 0.5rem; }
     .recipe-counter { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 0.4rem 1rem 1.4rem; }
     .recipe-counter a { color: var(--terracotta-deep); font-weight: 700; text-decoration: none; }
     /* butter popup — a bottom sheet over the home page */
     .butter-sheet { position: fixed; inset: 0; z-index: 300; }
-    .butter-sheet-backdrop { position: absolute; inset: 0; background: rgba(40,25,15,.34); }
+    .butter-sheet-backdrop { position: absolute; inset: 0; background: rgba(30,23,20,.34); }
     .butter-sheet-panel { position: absolute; left: 0; right: 0; bottom: 0; height: 90vh; max-width: 480px; margin: 0 auto;
-      background: #FFFDF5; border-radius: 16px 16px 0 0; box-shadow: 0 -8px 30px rgba(40,25,15,.28);
+      background: #FFFDF5; border-radius: 16px 16px 0 0; box-shadow: 0 -8px 30px rgba(30,23,20,.28);
       display: flex; flex-direction: column; overflow: hidden; }
     .butter-sheet-head { position: relative; height: 46px; flex: none; touch-action: none; cursor: grab; }
     .butter-sheet-close { position: absolute; left: 10px; top: 9px; background: none; border: none; cursor: pointer; color: var(--muted); padding: 4px; display: flex; }
@@ -216,7 +278,7 @@
     .cat-group-head:not(.is-empty):active { background: var(--cream); }
     .cat-group-head.is-empty { cursor: default; }
     .cat-group-name { font-family: var(--display); font-weight: 700; font-size: 1.05rem; color: var(--heading); }
-    .cat-group-count { color: var(--accent); font-size: 0.78rem; font-weight: 700; }
+    .cat-group-count { font-family: var(--mono); color: var(--teal-dark); font-size: 0.72rem; font-weight: 600; }
     /* clear "see all" / "collapse" affordance, right-aligned, with a chevron cue */
     .cat-group-seeall { margin-left: auto; display: inline-flex; align-items: center; gap: 0.25rem;
       color: var(--terracotta-deep); font-size: 0.82rem; font-weight: 700; }
@@ -235,6 +297,9 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
     .cat-option { padding: 0.5rem 0.75rem; cursor: pointer; }
     .cat-option:hover { background: var(--cream); }
+    .ing-row { position: relative; }   /* the type-ahead under the ingredient box hangs off this row */
+    /* the row can sit right above the floating "save recipe" button (z-index 260), so the list layers above it */
+    #ingDropdown { z-index: 270; }
     /* custom dropdown — replaces native <select>, which the OS draws dark & oversized */
     .sel { position: relative; display: inline-block; }
     .sel-btn { display: flex; align-items: center; gap: 0.4rem; width: 100%; box-sizing: border-box;
@@ -246,62 +311,62 @@
     .sel-list { position: absolute; left: 0; top: 100%; z-index: 60; margin-top: 3px;
       min-width: 100%; width: max-content; max-width: 16rem;
       background: var(--card); border: 1px solid var(--border); border-radius: 10px;
-      box-shadow: 0 6px 18px rgba(58,42,32,.16); max-height: 240px; overflow-y: auto; }
+      box-shadow: 0 6px 18px rgba(30,23,20,.16); max-height: 240px; overflow-y: auto; }
     .sel-opt { padding: 0.5rem 0.75rem; cursor: pointer; font-size: 0.95rem; white-space: nowrap; }
     .sel-opt:hover { background: var(--cream); }
     .sel-opt.on { color: var(--terracotta-deep); font-weight: 700; }
     .hidden { display: none !important; }
-    /* appRoot just flexes to fill the body; footer (margin-top:auto) drops to the bottom when content
-       is short, and appRoot grows (page scrolls) only when there are enough recipes to overflow. */
+    /* appRoot STRETCHES to fill the leftover screen height (flex:1) so the footer inside it — which uses
+       margin-top:auto — is pushed to the true bottom of the page, not just to the bottom of a short grid.
+       When the recipe list is short the footer pins to the bottom of the screen; when it's tall, appRoot
+       grows past the screen and the page scrolls with the footer last. (Earlier flex:0 0 auto made appRoot
+       hug its content, so the footer floated right under the grid mid-screen — the bug this fixes.) */
     #appRoot { box-sizing: border-box; display: flex; flex-direction: column; flex: 1 0 auto; }
-    /* full sign-in page (shown when logged out) — matches Claire's design */
+    /* full sign-in page (shown when logged out) — BRAND 2026: cool structure, warm soul.
+       Cream ground + a whisper of ruled lab-notebook lines; teal is the interactive color. */
     .login-screen { position: fixed; inset: 0; z-index: 200; padding: 1.25rem; overflow: auto;
       display: flex; align-items: center; justify-content: center;
-      background-color: #EEE1C2;
-      background-image:
-        repeating-linear-gradient(45deg,  rgba(176,92,73,.40) 0 66px, transparent 66px 150px),
-        repeating-linear-gradient(135deg, rgba(176,92,73,.40) 0 66px, transparent 66px 150px),
-        repeating-linear-gradient(45deg,  rgba(150,70,55,.20) 0 132px, transparent 132px 300px),
-        repeating-linear-gradient(135deg, rgba(232,205,140,.52) 0 26px, transparent 26px 150px),
-        repeating-linear-gradient(45deg,  rgba(232,205,140,.46) 0 26px, transparent 26px 150px); }
-    .login-card { width: 100%; max-width: 360px; text-align: center;
-      background: rgba(250,244,233,.92); border-radius: 22px; padding: 2.6rem 1.7rem 2rem;
-      box-shadow: 0 12px 40px rgba(90,50,30,.16); }
-    .login-wordmark { font-family: var(--body); font-weight: 800; font-size: 2.9rem; letter-spacing: -1px;
-      margin: 0 0 1.5rem; color: var(--espresso); }
+      background-color: var(--paper);
+      /* faint ruled-notebook lines — the "lab notebook", not a grandma plaid */
+      background-image: repeating-linear-gradient(to bottom, transparent 0 31px, rgba(114,108,100,.06) 31px 32px); }
+    .login-card { width: 100%; max-width: 360px; box-sizing: border-box; text-align: center;
+      background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 2.6rem 1.7rem 2rem;
+      box-shadow: 0 12px 40px rgba(30,23,20,.12); }
+    /* the real primary lockup (mark + wordmark) as the hero */
+    .login-logo { display: block; width: 210px; max-width: 74%; height: auto; margin: 0 auto 1.6rem; }
     .login-error { color: var(--danger); font-family: var(--body); font-size: .85rem; min-height: 1.1em; margin: 0 0 .5rem; }
     .login-field { display: flex; align-items: center; gap: .45rem; background: #fff;
-      border: 1px solid #D8C6A8; border-radius: 999px; padding: .44rem .95rem; margin: 0 0 .55rem; }
-    .login-field svg { flex: none; color: #8A6F52; }
+      border: 1px solid var(--field-line); border-radius: 999px; padding: .44rem .95rem; margin: 0 0 .55rem; }
+    .login-field:focus-within { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(0,126,156,.12); }
+    .login-field svg { flex: none; color: var(--muted); }
     /* padding:0 !important resets the GLOBAL input{padding:.45rem} rule — otherwise the input's own
        padding stacks INSIDE the pill's padding and makes these fields taller than the buttons below. */
     .login-field input { flex: 1; min-width: 0; border: none; outline: none; background: none;
       padding: 0 !important; height: auto;
       /* font-size must be >= 16px: iOS auto-zooms the whole page in when you focus an input
          smaller than that, and in the in-app webview it can then get "stuck" zoomed. */
-      font-family: var(--body); font-size: 1rem; color: var(--ink); font-style: italic; }
-    .login-primary { display: block; width: 100%; margin: .7rem 0 .9rem; font-family: var(--body);
-      font-size: .9rem; font-weight: 700; letter-spacing: .2px; color: #fff; background: #C9836F; border: 1px solid transparent; border-radius: 999px;
-      padding: .44rem 1rem; cursor: pointer; box-shadow: 0 3px 9px rgba(160,90,70,.26); }
-    .login-primary:hover { background: #bd7361; }
+      font-family: var(--body); font-size: 1rem; color: var(--ink); }
+    .login-primary { display: block; width: 100%; margin: .7rem 0 .9rem; font-family: var(--mono);
+      font-size: .82rem; font-weight: 600; letter-spacing: .3px; text-transform: lowercase; color: #fff; background: var(--teal); border: 1px solid transparent; border-radius: 999px;
+      padding: .5rem 1rem; cursor: pointer; box-shadow: 0 3px 9px rgba(0,126,156,.24); }
+    .login-primary:hover { background: var(--teal-dark); }
     .login-social { position: relative; display: flex; align-items: center; justify-content: center; width: 100%;
-      background: #FFFEFB; border: 1px solid #D8C6A8; border-radius: 999px; padding: .44rem 1rem; margin: 0 0 .45rem;
-      font-family: var(--body); font-size: .9rem; color: var(--ink); font-style: italic; cursor: pointer; }
-    .login-social:hover { background: #fff; }
+      background: #FFFEFB; border: 1px solid var(--field-line); border-radius: 999px; padding: .5rem 1rem; margin: 0 0 .45rem;
+      font-family: var(--body); font-size: .9rem; color: var(--ink); cursor: pointer; }
+    .login-social:hover { background: #fff; border-color: var(--border); }
     .login-social .soc-icon { position: absolute; left: 1.1rem; top: 50%; transform: translateY(-50%); display: flex; }
     .login-apple { background: #000; border-color: #000; color: #fff; font-style: normal; font-weight: 600; }
     .login-apple:hover { background: #111; }
     .login-forgot { margin: -.45rem 0 1.15rem; }   /* pull it up snug under the "log in" button and add clear space below, so it reads as belonging to log-in — not to "Sign in with Apple" */
     .login-forgot a { color: var(--muted); font-size: .82rem; text-decoration: underline; cursor: pointer; }
     .login-switch { font-family: var(--body); font-size: .95rem; color: var(--ink); margin: 1.3rem 0 0; }
-    .login-switch a { color: var(--terracotta-deep); font-weight: 700; cursor: pointer; text-decoration: underline; }
+    .login-switch a { color: var(--teal); font-weight: 700; cursor: pointer; text-decoration: underline; }
     .login-legal { margin: 0.6rem 0 0; }
     .login-legal a { color: var(--muted); font-size: 0.8rem; text-decoration: underline; }
-    /* small legal footer inside the app. It flows right after the content by default (so a short
-       categories/folder page has no big gap), and only PINS to the bottom on the recipes tab, where
-       the fixed butter bar already anchors the bottom of the screen. */
-    .applegal { text-align: center; padding: 1.5rem 0 1.25rem; }
-    .applegal { margin-top: auto; }   /* pin the footer to the bottom on EVERY tab (was recipes-only, so it floated mid-page on categories) */
+    /* small legal footer inside the app. margin-top:auto PINS it to the bottom of the 100dvh body when the
+       page is short (the leftover screen height becomes the gap ABOVE it — no dead space below), and it
+       simply flows after the content on a tall, scrolling page. padding-top keeps breathing room either way. */
+    .applegal { text-align: center; padding: 1.3rem 0 0.4rem; margin-top: auto; }
     /* only the recipes tab shows the fixed butter bar, so give the column extra bottom room there
        so the footer clears the bar instead of hiding behind it. The bar sits a FIXED distance from
        the true screen bottom (not safe-area-adjusted), but body already adds the safe-area inset to
@@ -311,7 +376,8 @@
     /* Only reserve the extra clearance that keeps the footer above the fixed butter bar WHILE the bubble
        actually rests at/near its default bottom spot (body.butter-atbottom, set by the bubble logic). Once
        the bubble is dragged up or tucked to a side, the bar no longer anchors the bottom, so drop the gap. */
-    body.butter-atbottom #appRoot.tab-recipes { padding-bottom: max(0.5rem, calc(2.75rem - env(safe-area-inset-bottom, 0px))); }
+    /* (removed the butter-reserve bottom padding here — the bubble floats at a FIXED viewport spot, not the
+       page bottom, so this padding never cleared it and only created dead space below the footer.) */
     .applegal a { color: var(--muted); font-size: 0.8rem; text-decoration: underline; cursor: pointer; }
     .footdot { color: var(--muted); font-size: 0.8rem; margin: 0 0.55rem; }
     .applegal a.footdanger { color: var(--danger); }
@@ -321,10 +387,10 @@
     .settings-gear svg { display: block; width: 23px; height: 23px; }
     .settings-gear:hover { color: var(--terracotta-deep); }
     .settings-sheet { position: fixed; inset: 0; z-index: 3500; }
-    .settings-backdrop { position: absolute; inset: 0; background: rgba(40,25,15,.4); opacity: 0; transition: opacity .18s ease; }
+    .settings-backdrop { position: absolute; inset: 0; background: rgba(30,23,20,.4); opacity: 0; transition: opacity .18s ease; }
     .settings-sheet.show .settings-backdrop { opacity: 1; }
     .settings-panel { position: absolute; left: 0; right: 0; bottom: 0; max-width: 480px; margin: 0 auto;
-      background: var(--paper); border-radius: 22px 22px 0 0; box-shadow: 0 -12px 40px rgba(40,25,15,.28);
+      background: var(--paper); border-radius: 22px 22px 0 0; box-shadow: 0 -12px 40px rgba(30,23,20,.28);
       padding: 1rem 1.25rem calc(1.4rem + env(safe-area-inset-bottom, 0px)); box-sizing: border-box;
       transform: translateY(100%); transition: transform .22s ease; max-height: 90vh; overflow: auto; }
     .settings-sheet.show .settings-panel { transform: translateY(0); }
@@ -341,23 +407,28 @@
     .settings-seg button { border: none; background: none; border-radius: 999px; padding: .3rem .8rem; font-weight: 700; font-size: .82rem; color: var(--muted); cursor: pointer; font-family: var(--body); }
     .settings-seg button.on { background: var(--card); color: var(--heading); box-shadow: var(--shadow-sm); }
     .settings-link { display: block; padding: .85rem 0; border-bottom: 1px solid var(--border); color: var(--terracotta-deep); font-weight: 700; font-size: .95rem; text-decoration: none; }
-    .settings-account { display: flex; justify-content: space-between; align-items: center; padding: 1rem 0 .2rem; }
+    .settings-account { padding: 1rem 0 .2rem; }
     .settings-signout { color: var(--terracotta-deep); font-weight: 700; font-size: .95rem; cursor: pointer; text-decoration: underline; }
-    .settings-delete { color: var(--danger); font-weight: 700; font-size: .9rem; cursor: pointer; text-decoration: underline; }
+    /* delete lives in its own separated "danger" area — never on the same row as sign out, so a stray
+       tap meant for sign out can't land on delete */
+    .settings-danger { margin-top: 1.4rem; padding-top: 0.85rem; border-top: 1px solid var(--border); }
+    .settings-delete { color: var(--danger); font-weight: 600; font-size: .82rem; cursor: pointer; text-decoration: underline; opacity: .85; }
     /* boot loading screen — shown instantly so there's never a blank gap while auth resolves */
     #bootScreen { position: fixed; inset: 0; z-index: 500; display: flex; align-items: center; justify-content: center;
-      background-color: #EFE3C2; font-family: var(--body); font-weight: 800; font-size: 2.6rem; letter-spacing: -1px;
+      background-color: var(--paper); font-family: var(--body); font-weight: 800; font-size: 2.6rem; letter-spacing: -1px;
       color: var(--espresso); }
+    #bootScreen img { height: 34px; width: auto; max-width: 78%; }
   </style>
 </head>
 <body>
   <!-- instant loading screen so there's never a blank gap before Firebase auth answers -->
-  <div id="bootScreen">bakebook</div>
+  <div id="bootScreen"><img src="wordmark.svg" alt="bakebook"></div>
 
   <!-- sign-in page: shown until you're logged in -->
   <div id="loginScreen" class="login-screen hidden">
     <div class="login-card">
-      <h1 class="login-wordmark">bakebook</h1>
+      <img class="login-logo" src="wordmark.svg" alt="bakebook · recipe lab">
+      <h1 class="login-wordmark visually-hidden" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">bakebook</h1>
       <p id="loginError" class="login-error"></p>
 
       <label class="login-field">
@@ -398,7 +469,7 @@
       </button>
 
       <p class="login-switch"><span id="loginSwitchText">don't have an account? </span><a id="loginToggle">sign up!</a></p>
-      <p class="login-legal"><a href="privacy.html">privacy &amp; terms</a></p>
+      <p class="login-legal"><a href="about.html">what is bakebook?</a><span class="footdot">·</span><a href="privacy.html">privacy &amp; terms</a></p>
     </div>
   </div>
 
@@ -410,11 +481,16 @@
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
   </button>
 
-  <h1 class="wordmark">bakebook</h1>
-  <p class="tagline">store. develop. bake.</p>
+  <h1 class="wordmark"><img src="wordmark.svg" alt="bakebook" style="height:30px;width:auto;max-width:80%;display:block;margin:0 auto"></h1>
+  <p class="tagline">store. develop. <span class="bake">bake.</span></p>
 
   <!-- ===== HOME (recipes) ===== -->
   <div id="recipesView">
+    <!-- shown only to password accounts whose email is not confirmed yet; goes away once they confirm -->
+    <div class="confirm-nudge hidden" id="confirmNudge" role="status">
+      <span class="confirm-msg" id="confirmMsg">confirm your email to keep your password safe.</span>
+      <button type="button" id="confirmResend">resend email</button>
+    </div>
     <div class="controls">
       <input class="search" id="recipeSearch" type="text" placeholder="search my recipes">
       <div class="sort" id="sortMount"></div>
@@ -428,7 +504,7 @@
 
     <!-- create form (hidden until "new recipe") -->
     <div class="card hidden" id="createForm">
-      <button type="button" class="createback" id="createBack">← recipes</button>
+      <button type="button" class="createback" id="createBack" aria-label="home" title="home"><img src="home.svg" alt="home"></button>
       <h2 class="form-title">new recipe</h2>
       <button type="button" class="import-btn" id="importPhotoBtn">import from photos</button>
       <input type="file" id="importPhotoInput" accept="image/*" multiple style="display:none">
@@ -437,6 +513,8 @@
       <p class="import-hint" id="importStatus"></p>
       <label for="nameInput">recipe name</label>
       <input id="nameInput" type="text" placeholder="">
+
+      <div class="tvrow" id="tvRow"></div>   <!-- time + serves: tap-to-add fields, built by bakebook-meta.js -->
 
       <label for="descInput">description</label>
       <textarea id="descInput" rows="2" placeholder=""></textarea>
@@ -449,20 +527,25 @@
 
       <div class="section-title">ingredients</div>
       <div id="ingredientList"></div>
-      <div class="inline">
-        <input class="amount" id="ingAmount" type="text" placeholder="">
+      <div class="inline ing-row">
+        <input class="iname" id="ingName" type="text" autocomplete="off" placeholder="ingredient">
         <div class="unit" id="ingUnitMount"></div>
-        <input class="iname" id="ingName" type="text" placeholder="">
+        <div class="amount" id="ingAmountMount"></div>   <!-- the amount wheel is mounted here -->
+        <button class="lib-add" id="addIngredient" type="button" aria-label="add ingredient" title="add ingredient">+</button>
+        <div class="cat-dropdown hidden" id="ingDropdown"></div>   <!-- type-ahead: likely ingredients as you type -->
       </div>
-      <button class="small" id="addIngredient" style="margin-top:0.5rem;">+ add ingredient</button>
-      <div class="section-title">ingredient library</div>
-      <input id="librarySearch" type="text" placeholder="search ingredients">
-      <div id="libraryGrid" class="lib-grid"></div>
+      <button type="button" class="section-title lib-toggle" id="libraryToggle" aria-expanded="false" aria-controls="libraryBody">ingredient library <span class="lib-caret" aria-hidden="true">▾</span></button>
+      <div id="libraryBody" class="hidden">
+        <input id="librarySearch" type="text" placeholder="search ingredients">
+        <div id="libraryGrid" class="lib-grid"></div>
+      </div>
 
       <div class="section-title">method</div>
       <ol id="stepList" style="padding-left:1.1rem; margin:0;"></ol>
-      <textarea id="stepInput" placeholder="add a step" rows="1" style="margin-top:0.5rem; resize:none; overflow:hidden;"></textarea>
-      <button class="small" id="addStep" style="margin-top:0.5rem;">+ add step</button>
+      <div class="inline step-row">   <!-- same shape as the ingredient row: box, round + -->
+        <textarea id="stepInput" placeholder="step" rows="1" style="resize:none; overflow:hidden;"></textarea>
+        <button class="lib-add" id="addStep" type="button" aria-label="add step" title="add step">+</button>
+      </div>
 
       <button class="save" id="saveButton">save recipe</button>
     </div>
@@ -497,6 +580,8 @@
 
       <div class="settings-account">
         <a id="signOutBtn" role="button" tabindex="0" class="settings-signout">sign out</a>
+      </div>
+      <div class="settings-danger">
         <a id="deleteAccountBtn" role="button" tabindex="0" class="settings-delete">delete account</a>
       </div>
     </div>
@@ -531,8 +616,14 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
   <script src="firebase-init.js"></script>
+  <script src="bakebook-events.js"></script>   <!-- the event log: what people do, never what they wrote -->
   <script src="bakebook-store.js"></script>
+  <script src="bakebook-butter-sync.js"></script>
   <script src="bakebook-billing.js"></script>
+  <script src="bakebook-units.js"></script>  <!-- the unit list + the bottom sheet you pick one from -->
+  <script src="bakebook-meta.js"></script>   <!-- time + serves: tap-to-add fields with a scrolling sheet -->
+  <script src="bakebook-ingredients.js"></script>  <!-- the ingredient library: learned from your recipes, duplicates merged -->
+  <script src="bakebook-back.js"></script>   <!-- Android back gesture: one step back, never quit -->
   <script>
     // ---------- sign in (Google + email/password) ----------
     const auth = firebase.auth();
@@ -546,6 +637,61 @@
       loginError.style.color = "";   // back to the red error color (a success note may have turned it green)
       loginError.textContent = m;
     }
+
+    // Confirmation email for password accounts. Firebase deletes an UNconfirmed account's password the first
+    // time its owner signs in with Google, so we ask people to confirm. The link's "continue" goes to bakebook.co.
+    function sendConfirmEmail(user) {
+      return user.sendEmailVerification({ url: "https://bakebook.co/" }).catch(function (e) {
+        // if the continue address is ever refused, still send the email, just without it
+        const code = e && e.code || "";
+        if (code === "auth/unauthorized-continue-uri" || code === "auth/invalid-continue-uri") return user.sendEmailVerification();
+        throw e;
+      });
+    }
+
+    // the reminder on home: only for accounts that sign in with a password and haven't confirmed yet
+    function needsConfirm(user) {
+      return !!(user && !user.emailVerified && (user.providerData || []).some(function (p) { return p && p.providerId === "password"; }));
+    }
+    function updateConfirmNudge() {
+      const user = auth.currentUser;
+      const nudge = document.getElementById("confirmNudge");
+      const show = needsConfirm(user);
+      if (show && nudge.classList.contains("hidden")) {   // fresh showing: back to the plain reminder line
+        document.getElementById("confirmMsg").textContent = "confirm your email to keep your password safe.";
+      }
+      nudge.classList.toggle("hidden", !show);
+    }
+    // Confirming happens in another tab or the mail app, so the signed-in copy goes stale. Ask Firebase
+    // again when the app opens and every time it comes back into view (one check at a time).
+    let confirmCheckBusy = false, lastVisibleCheck = 0;
+    function recheckConfirmed() {
+      const user = auth.currentUser;
+      if (!needsConfirm(user)) { updateConfirmNudge(); return; }
+      if (confirmCheckBusy) return;
+      confirmCheckBusy = true;
+      user.reload().then(updateConfirmNudge).catch(function () {})
+        .then(function () { confirmCheckBusy = false; });
+    }
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastVisibleCheck < 2000) return;   // skip a burst of back-to-back visibility events
+      lastVisibleCheck = Date.now();
+      recheckConfirmed();
+    });
+    document.getElementById("confirmResend").addEventListener("click", function () {
+      const user = auth.currentUser, btn = this, msg = document.getElementById("confirmMsg");
+      if (!user) return;
+      btn.disabled = true;
+      sendConfirmEmail(user)
+        .then(function () { msg.textContent = "sent to " + user.email + ". check your inbox (and spam)."; })
+        .catch(function (e) {
+          msg.textContent = (e && e.code === "auth/too-many-requests")
+            ? "already sent. check your inbox, or try again in a few minutes."
+            : "couldn't send it just now. try again in a moment.";
+        })
+        .then(function () { btn.disabled = false; });
+    });
 
     // "forgot password?" — email a reset link to whatever's in the email field
     document.getElementById("forgotLink").addEventListener("click", function () {
@@ -581,14 +727,19 @@
       if (authMode === "signup") {
         const confirm = document.getElementById("loginConfirm").value;
         if (pw !== confirm) { loginError.textContent = "passwords don't match."; return; }
-        auth.createUserWithEmailAndPassword(email, pw).catch(showLoginError);
+        auth.createUserWithEmailAndPassword(email, pw)
+          .then(function (cred) { sendConfirmEmail(cred.user).catch(function () {}); })   // a failed send never blocks sign-up; the home reminder can resend
+          .catch(showLoginError);
       } else {
         auth.signInWithEmailAndPassword(email, pw).catch(showLoginError);
       }
     }
     document.getElementById("loginPrimaryBtn").addEventListener("click", submitEmailPassword);
+    // In sign-up, Enter on the password moves on to the confirm box instead of submitting a half-filled form.
     document.getElementById("loginPassword").addEventListener("keydown", function (e) {
-      if (e.key === "Enter") submitEmailPassword();
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      if (authMode === "signup") document.getElementById("loginConfirm").focus(); else submitEmailPassword();
     });
     document.getElementById("loginConfirm").addEventListener("keydown", function (e) {
       if (e.key === "Enter") submitEmailPassword();
@@ -622,10 +773,24 @@
       }
     }
 
-    document.getElementById("loginGoogleBtn").addEventListener("click", function () {
+    // One popup at a time. A second tap while Google's window is still open made Firebase cancel the first
+    // with "this operation has been cancelled due to another conflicting popup" (Claire on bakebook.co,
+    // 2026-09-12). The button is held down until the first attempt settles, and a cancelled or closed popup
+    // is not an error worth showing.
+    let popupPending = false;
+    const googleBtn = document.getElementById("loginGoogleBtn");
+    googleBtn.addEventListener("click", function () {
       loginError.textContent = "";
       if (isNativeApp) { nativeSignIn("google"); return; }
-      auth.signInWithPopup(googleProvider).catch(showLoginError);
+      if (popupPending) return;
+      popupPending = true; googleBtn.disabled = true;
+      auth.signInWithPopup(googleProvider)
+        .catch(function (e) {
+          const code = e && e.code || "";
+          if (code === "auth/cancelled-popup-request" || code === "auth/popup-closed-by-user") return;
+          showLoginError(e);
+        })
+        .finally(function () { popupPending = false; googleBtn.disabled = false; });
     });
 
     // "Sign in with Apple" only appears inside the phone app (needs native APIs).
@@ -656,13 +821,13 @@
     document.getElementById("deleteAccountBtn").addEventListener("click", async function () {
       const yes = await bbConfirm({
         title: "delete your account?",
-        message: "This permanently erases your bakebook account and ALL of your recipes, log entries, and photos. It can't be undone.",
-        okLabel: "delete everything",
+        message: "This signs you out and schedules your account for deletion. Your recipes, log entries, and photos are kept for 10 days in case you change your mind — just sign back in during that time to restore everything. After 10 days it's permanently erased.",
+        okLabel: "delete my account",
         cancelLabel: "keep my account",
         danger: true
       });
       if (!yes) return;
-      bbNotice("deleting your account…");
+      bbNotice("scheduling your account for deletion…");
       try {
         await firebase.functions().httpsCallable("deleteAccount")();
         try { localStorage.clear(); } catch (e) {}   // wipe the local cached copy too
@@ -671,6 +836,12 @@
       } catch (e) {
         bbNotice("couldn't delete your account — please try again");
       }
+    });
+
+    // when the store auto-reactivates an account that was still inside its 10-day deletion grace window
+    // (the baker signed back in), greet them so the recovery is visible, not silent.
+    window.addEventListener("bakebook:restored", function () {
+      bbNotice("welcome back — your account and recipes are restored");
     });
 
     // ---- settings sheet ----
@@ -707,6 +878,7 @@
         requestAnimationFrame(function () { sheet.classList.add("show"); });
       }
       function closeSettings() { if (window.bbUnlockScroll) window.bbUnlockScroll("settings"); sheet.classList.remove("show"); setTimeout(function () { sheet.classList.add("hidden"); }, 240); }
+      window.bbCloseSettings = closeSettings;   // so the Android back gesture (bakebook-back.js) can close the sheet too
       document.getElementById("settingsBtn").addEventListener("click", openSettings);
       document.getElementById("settingsFootLink").addEventListener("click", openSettings);
       document.getElementById("settingsClose").addEventListener("click", closeSettings);
@@ -724,6 +896,9 @@
     auth.onAuthStateChanged(function (user) {
       const loginScreen = document.getElementById("loginScreen");
       const appRoot = document.getElementById("appRoot");
+      // remembered for the next load: with this set, the home page paints from the local copy at once
+      // instead of showing the wordmark screen until Firebase answers (the "blank flash" on Android back)
+      try { if (user) localStorage.setItem("bakebook.signedIn", "1"); else localStorage.removeItem("bakebook.signedIn"); } catch (e) {}
       if (user) {
         loginScreen.classList.add("hidden");
         appRoot.classList.remove("hidden");
@@ -733,7 +908,9 @@
         if (_ss) { _ss.classList.remove("show"); _ss.classList.add("hidden"); if (window.bbUnlockScroll) window.bbUnlockScroll("settings"); }
         try { showTab(); } catch (e) {}
         syncPremiumFromServer(user.uid);   // tie purchases to this account + mirror server premium locally
+        updateConfirmNudge(); recheckConfirmed();   // "confirm your email" reminder, refreshed from Firebase
       } else {
+        updateConfirmNudge();
         appRoot.classList.add("hidden");
         loginScreen.classList.remove("hidden");
       }
@@ -803,6 +980,42 @@
         modal.addEventListener("click", function (e) { if (e.target === modal) close(false); });
         document.addEventListener("keydown", onKey);
         cancel.focus();
+      });
+    }
+
+    // Like bbConfirm, but offers a vertical stack of labelled choices (returns the chosen value, or null
+    // if dismissed). Used by the category-delete flow, which needs a 3-way pick, not just ok/cancel.
+    function bbChoose(opts) {
+      opts = opts || {};
+      const options = opts.options || [];
+      return new Promise(function (resolve) {
+        const modal = document.createElement("div"); modal.className = "bb-modal";
+        const card = document.createElement("div"); card.className = "bb-modal-card";
+        const h = document.createElement("div"); h.className = "bb-modal-title"; h.textContent = opts.title || "choose";
+        const m = document.createElement("div"); m.className = "bb-modal-msg"; m.textContent = opts.message || "";
+        const actions = document.createElement("div"); actions.className = "bb-modal-actions";
+        actions.style.flexDirection = "column"; actions.style.gap = "0.5rem";
+        card.appendChild(h); if (opts.message) card.appendChild(m); card.appendChild(actions);
+        modal.appendChild(card); document.body.appendChild(modal);
+        requestAnimationFrame(function () { modal.classList.add("show"); });
+        let done = false;
+        function close(result) {
+          if (done) return; done = true;
+          modal.classList.remove("show");
+          document.removeEventListener("keydown", onKey);
+          setTimeout(function () { modal.remove(); }, 180);
+          resolve(result);
+        }
+        function onKey(e) { if (e.key === "Escape") close(null); }
+        options.forEach(function (o) {
+          const b = document.createElement("button"); b.type = "button";
+          b.className = "bb-btn " + (o.danger ? "bb-btn-confirm danger" : (o.value == null ? "bb-btn-cancel" : "bb-btn-confirm"));
+          b.textContent = o.label; b.style.width = "100%";
+          b.addEventListener("click", function () { close(o.value); });
+          actions.appendChild(b);
+        });
+        modal.addEventListener("click", function (e) { if (e.target === modal) close(null); });
+        document.addEventListener("keydown", onKey);
       });
     }
 
@@ -919,7 +1132,7 @@
     }
 
     // ---------- ingredient library (common ingredients + your most-used, learned live) ----------
-    const UNITS = ["g", "kg", "ml", "l", "cups", "tbsp", "tsp", "oz", "pinch", "each"];
+    const UNITS = window.BB_UNITS;   // the one list, in bakebook-units.js (the picker lives there too)
     const COMMON_INGREDIENTS = [
       "all purpose flour", "bread flour", "cake flour", "almond flour", "whole wheat flour",
       "granulated sugar", "brown sugar", "powdered sugar",
@@ -968,17 +1181,430 @@
       const u = defaultUnitFor(name);
       return { amount: (u === "g" || u === "ml") ? 100 : 1, unit: u };
     }
-    // Your ingredients first (most-used first), then common ones you haven't used yet.
+    // The library entries: your own ingredients learned from every saved recipe plus the common ones,
+    // duplicates merged, most-used first, at most 100 (bakebook-ingredients.js does the work). Each entry
+    // is { name, key, count, lastUsed, amount, unit }; amount and unit are the ones you used last, or
+    // null for a common ingredient you have not used yet.
     function getLibrary() {
-      const counts = {};
-      recipes.forEach(function (r) {
-        (r.ingredients || []).forEach(function (ing) {
-          const n = (ing.name || "").trim().toLowerCase();
-          if (n) counts[n] = (counts[n] || 0) + 1;
-        });
+      return bbBuildLibrary(recipes, COMMON_INGREDIENTS);
+    }
+    // Read an amount that may be a decimal ("0.5"), a slash fraction ("1/2", "1 1/2"), or a unicode
+    // fraction ("½", "1½"). parseFloat alone reads "½" as NaN and "1/2" as 1, so a learned "1/2 cup"
+    // used to come back as "1 cups". A range ("2-3") keeps only the lower number. (Same as recipe.html.)
+    const UNI_FRAC = {'½':.5,'⅓':1/3,'⅔':2/3,'¼':.25,'¾':.75,'⅛':.125,'⅜':.375,'⅝':.625,'⅞':.875,'⅕':.2,'⅖':.4,'⅗':.6,'⅘':.8,'⅙':1/6,'⅚':5/6};
+    function parseAmount(s) {
+      if (typeof s === 'number') return s;
+      s = String(s == null ? '' : s).trim();
+      if (!s) return 0;
+      s = s.replace(/[½⅓⅔¼¾⅛⅜⅝⅞⅕⅖⅗⅘⅙⅚]/g, function (m) { return ' ' + UNI_FRAC[m] + ' '; });
+      s = s.replace(/\s*(?:-|–|—|\bto\b|\bor\b)\s*\d[\d\s./]*$/i, '');
+      let total = 0, matched = false;
+      s.split(/\s+/).forEach(function (tok) {
+        if (!tok) return;
+        if (/^\d+\/\d+$/.test(tok)) { const p = tok.split('/'); if (+p[1]) { total += (+p[0]) / (+p[1]); matched = true; } }
+        else { const n = parseFloat(tok); if (!isNaN(n)) { total += n; matched = true; } }
       });
-      // only common whole ingredients; float the ones you use most to the top (imported/custom names stay out)
-      return COMMON_INGREDIENTS.slice().sort(function (a, b) { return (counts[b] || 0) - (counts[a] || 0); });
+      return matched ? total : 0;
+    }
+    // ---- the amount wheel (shared by the library cards, the + ingredient row, and editing a draft row) ----
+    // Flick or drag up to increase, down to decrease; scroll with a mouse or trackpad the same way; double-tap
+    // to type an exact amount. A fast scroll jumps in fives (23 → 25 → 30), a slow one goes by one.
+    // The element it returns acts like an input: `.value` (a string, "" when empty), `.focus()` opens typing.
+    const WHEEL_STEP_PX = 12;      // finger travel per step when dragging fast (fives, tens, fifties)
+    const WHEEL_STEP_PX_SLOW = 22; // finger travel per step when dragging slowly, by ones: room to land on 467 exactly
+    const WHEEL_STEP_SCROLL = 30;  // scroll-delta per step with a mouse/trackpad
+    const WHEEL_FAST_DRAG = 0.35;  // px per ms; above this a drag steps by five (0.5 never tripped under a thumb on the phone, 2026-09-12)
+    const WHEEL_FAST_SCROLL = 1.5; // scroll-delta per ms; above this a scroll steps by five
+    const WHEEL_FLING = 0.15;      // px per ms at finger-lift; above this the wheel keeps coasting. Set above Android's 50 dp/s
+                                   // floor so a slow, careful drag stops dead where the finger lifts (Claire, 2026-09-12)
+    const WHEEL_FRICTION = 0.995;  // how much of the speed survives each ms of coasting (between iOS's "fast" and "normal" rates)
+    const WHEEL_MAX_FLING = 5;     // px per ms; a harder flick than this coasts no further (about 1000px, 80 notches)
+    const WHEEL_GENTLE_MS = 110;   // fraction units (trackpad only): never more than one notch per this many ms
+    const WHEEL_LINGER_MS = 900;   // the grown column stays (and stays touchable) this long after the wheel stops
+    const WHEEL_OVERPULL = 34;     // px the list can be pulled past 0 before it simply stops (then springs back)
+    // what one notch is for each unit. fine = a slow notch, fast = a flick notch; either always lands on the
+    // unit's own grid. Grids follow the tools bakers own: cup sets are 1/4, 1/3, 1/2, 2/3, 3/4 and 1; spoon sets
+    // go down to 1/8 tsp; pounds and ounces in quarters (a stick of butter is 1/4 lb, a yeast packet 1/4 oz);
+    // pints in halves; quarts and gallons in quarters (a cup is 1/4 qt, a quart is 1/4 gal). Grams, ml and counts
+    // go 1 then 5. Anything unlisted behaves like grams.
+    const CUP_GRID = [0, 0.25, 1 / 3, 0.5, 2 / 3, 0.75];   // the positions inside one cup a slow notch stops on
+    const WHEEL_STEPS = {
+      // fast for g / ml / each grows with the number: 5 under 100, 10 under 1000, 50 above (see fastFor)
+      g: { fine: 1, fast: 5, scale: true }, ml: { fine: 1, fast: 5, scale: true }, each: { fine: 1, fast: 5, scale: true },
+      kg: { fine: 0.05, fast: 0.5 }, l: { fine: 0.05, fast: 0.5 },   // 0.05 so 250 g reads 0.25 kg, not 0.2
+      // gentle: fraction units never take a fast notch and need three times the finger travel per notch
+      cups: { fine: CUP_GRID, fast: 1, gentle: true },
+      tbsp: { fine: 0.125, fast: 1, gentle: true }, tsp: { fine: 0.125, fast: 1, gentle: true },
+      oz: { fine: 0.25, fast: 1, gentle: true }, lb: { fine: 0.25, fast: 1, gentle: true }, "fl oz": { fine: 0.5, fast: 2, gentle: true },
+      pt: { fine: 0.5, fast: 1, gentle: true }, qt: { fine: 0.25, fast: 1, gentle: true }, gal: { fine: 0.25, fast: 1, gentle: true },
+      pinch: { fine: 1, fast: 1 }, dash: { fine: 1, fast: 1 }
+    };
+    const EIGHTHS = ["", "1/8", "1/4", "3/8", "1/2", "5/8", "3/4", "7/8"];
+    const R3 = function (v) { return Math.round(v * 1000) / 1000; };
+    // how an amount reads on the wheel: "1 1/2" or "2/3" for cup/spoon/pound units, "0.5" for kg/l, plain otherwise
+    function fmtAmount(v, unit) {
+      const st = WHEEL_STEPS[unit] || WHEEL_STEPS.g;
+      const whole = Math.floor(v + 1e-9), frac = v - whole;
+      if (frac < 0.005) return String(whole);
+      if (st.fine === 0.05) return String(Math.round(v * 100) / 100);   // kg and l read as decimals
+      if (st.fine !== 1) {
+        let name = null;
+        const t = frac * 3, e = frac * 8;
+        if (Math.abs(t - Math.round(t)) < 0.02 && Math.round(t) % 3) name = Math.round(t) + "/3";
+        else if (Math.abs(e - Math.round(e)) < 0.02) name = Math.round(e) === 8 ? null : EIGHTHS[Math.round(e)];
+        if (name) return whole ? whole + " " + name : name;
+        if (Math.abs(e - 8) < 0.02) return String(whole + 1);
+      }
+      return String(Math.round(v * 100) / 100);
+    }
+    // the fast notch for a unit at a given number: bigger numbers take bigger jumps, so 1000 g does not need
+    // 180 notches to reach 100 (Claire, 2026-09-12). Going down, the size is judged from just below the number
+    // so 1000 steps to 950 in a 50, and 100 steps to 90 in a 10.
+    function fastFor(st, cur, dir) {
+      if (!st.scale) return st.fast;
+      const at = dir > 0 ? cur : cur - 1;
+      return at >= 1000 ? 50 : at >= 100 ? 10 : 5;
+    }
+    // the next stop on the unit's grid from cur, going up (dir 1) or down (dir -1), fine or fast
+    function nextStop(cur, dir, unit, big) {
+      const st = WHEEL_STEPS[unit] || WHEEL_STEPS.g;
+      const grid = big ? fastFor(st, cur, dir) : st.fine;
+      if (typeof grid === "number") {
+        return R3(dir > 0 ? Math.floor(cur / grid + 1e-6) * grid + grid : Math.ceil(cur / grid - 1e-6) * grid - grid);
+      }
+      const whole = Math.floor(cur + 1e-6), frac = cur - whole;
+      if (dir > 0) {
+        for (let i = 0; i < grid.length; i++) if (grid[i] > frac + 0.005) return R3(whole + grid[i]);
+        return R3(whole + 1);
+      }
+      for (let i = grid.length - 1; i >= 0; i--) if (grid[i] < frac - 0.005) return R3(whole + grid[i]);
+      return R3(whole - 1 + grid[grid.length - 1]);
+    }
+    // converting an amount when the unit beside the wheel changes (same tables as the recipe page's cups/grams
+    // view; second copy on purpose, a third use is the moment to share them)
+    const CONV_MASS = { g: 1, kg: 1000, oz: 28.3495, lb: 453.592 };                                        // → grams
+    const CONV_VOL = { cups: 1, tbsp: 1 / 16, tsp: 1 / 48, "fl oz": 1 / 8, pt: 2, qt: 4, gal: 16, ml: 1 / 236.588, l: 1000 / 236.588 };   // → cups
+    const CONV_DENSITY = [   // grams per cup, by ingredient name (volume ↔ weight needs it)
+      ["bread flour", 130], ["cake flour", 114], ["almond flour", 96], ["ap flour", 125], ["flour", 125],
+      ["brown sugar", 213], ["powdered sugar", 120], ["icing sugar", 120], ["caster sugar", 200], ["granulated sugar", 200], ["sugar", 200],
+      ["cocoa", 85], ["butter", 227], ["buttermilk", 242], ["milk", 240], ["water", 236], ["yogurt", 245], ["sour cream", 240], ["cream", 232],
+      ["honey", 340], ["maple syrup", 322], ["oil", 218], ["cornstarch", 128], ["cornflour", 128], ["rolled oats", 90], ["oats", 90],
+      ["baking soda", 220], ["baking powder", 192], ["salt", 273], ["peanut butter", 258], ["chocolate chips", 170]
+    ];
+    function densityFor(name) { const n = (name || "").toLowerCase(); for (let i = 0; i < CONV_DENSITY.length; i++) if (n.indexOf(CONV_DENSITY[i][0]) !== -1) return CONV_DENSITY[i][1]; return null; }
+    // the same amount in another unit, or null when there is no sensible conversion (counts, or a volume ↔
+    // weight change for an ingredient whose density we do not know)
+    function convertAmount(a, from, to, name) {
+      if (from === to) return a;
+      const fm = CONV_MASS[from] != null, tm = CONV_MASS[to] != null, fv = CONV_VOL[from] != null, tv = CONV_VOL[to] != null;
+      if (fm && tm) return a * CONV_MASS[from] / CONV_MASS[to];
+      if (fv && tv) return a * CONV_VOL[from] / CONV_VOL[to];
+      const d = densityFor(name);
+      if (d == null) return null;
+      if (fv && tm) return a * CONV_VOL[from] * d / CONV_MASS[to];
+      if (fm && tv) return a * CONV_MASS[from] / d / CONV_VOL[to];
+      return null;
+    }
+    // the nearest stop on a unit's slow grid; a tiny amount rounds up to the first stop rather than to 0
+    function snapTo(x, unit) {
+      // nudge by more than nextStop's own tolerance, so a number already on the grid snaps to itself
+      const down = Math.max(0, nextStop(x + 0.006, -1, unit, false)), up = nextStop(x - 0.006, 1, unit, false);
+      if (x > 0 && down === 0) return up;
+      return (x - down) <= (up - x) ? down : up;
+    }
+    function bbAmountWheel(initial, opts) {
+      opts = opts || {};
+      const unitNow = function () { return bbNormalizeUnit(opts.unit && opts.unit()) || "g"; };
+      let shownUnit = null;   // the unit the number on the wheel is in; a change converts the number
+      // the exact number underneath the snapped one, kept for the next two unit changes so a round trip
+      // (250 g → 1 3/4 cups → back to g) lands on 250 again, then dropped (Claire, 2026-09-12)
+      let exact = null;       // { amount, unit, uses }
+      const wheel = document.createElement("div"); wheel.className = "wheel" + (opts.className ? " " + opts.className : "");
+      const gUp = document.createElement("span"); gUp.className = "wheel-ghost";
+      const vEl = document.createElement("span"); vEl.className = "wheel-val";
+      const gDn = document.createElement("span"); gDn.className = "wheel-ghost";
+      wheel.appendChild(gUp); wheel.appendChild(vEl); wheel.appendChild(gDn);
+      // val = the number the wheel is on (null = empty, shows the placeholder). txt = the exact text she typed
+      // or picked ("1/2"), kept until the wheel is moved so a fraction stays a fraction in the recipe.
+      let val = null, txt = null;
+      // the floating readout: shown while the wheel is turning (drag, coast or scroll), hidden a moment after
+      let bubble = null, bubbleHide = null;
+      // While the wheel turns two things appear. The box grows a little taller (one row above, one below, about
+      // a thumb) and its numbers SLIDE with the finger the way an iOS picker does: the list moves continuously,
+      // the highlight band stays put, and a notch is simply the moment the next row reaches the band. A small
+      // readout above shows the exact number and unit. Everything folds away when the wheel stops.
+      let col = null, colList = null, colRows = null, colRowH = 38, colPx = WHEEL_STEP_PX;
+      function showBubble() {
+        if (!bubble) {
+          bubble = document.createElement("div"); bubble.className = "wheel-bubble"; document.body.appendChild(bubble);
+          col = document.createElement("div"); col.className = "wheel-col";
+          const clip = document.createElement("div"); clip.className = "wheel-col-clip"; col.appendChild(clip);
+          colList = document.createElement("div"); colList.className = "wheel-col-list"; clip.appendChild(colList);
+          const band = document.createElement("div"); band.className = "wheel-col-band"; clip.appendChild(band);
+          document.body.appendChild(col);
+          // a touch on the column (or its margin) drives this wheel; capture goes to the wheel so move/up land there
+          col.addEventListener("pointerdown", function (e) { onDown(e); e.stopPropagation(); });
+          col.addEventListener("pointermove", onMove);
+          col.addEventListener("pointerup", endDrag);
+          col.addEventListener("pointercancel", endDrag);
+        }
+        const r = wheel.getBoundingClientRect();
+        colRowH = r.height;
+        const colH = colRowH * 3;
+        col.style.width = r.width + "px"; col.style.height = colH + "px";
+        col.style.top = (r.top + r.height / 2 - colH / 2) + "px"; col.style.left = (r.left + r.width / 2) + "px";
+        col.style.setProperty("--row", colRowH + "px");
+        renderCol();
+        const half = bubble.offsetWidth / 2, want = r.left + r.width / 2;
+        bubble.style.left = Math.min(window.innerWidth - half - 8, Math.max(half + 8, want)) + "px";
+        bubble.style.top = (r.top + r.height / 2 - colH / 2 - 10) + "px";
+        clearTimeout(bubbleHide); bubble.classList.add("show"); col.classList.add("show");
+      }
+      // the rows: two stops below the number (lower values, drawn above), the number, two above (drawn below)
+      function renderCol() {
+        if (!col) return;
+        const u = unitNow(), cur = val === null ? 0 : val, big = fast;
+        // nothing below 0: the rows under it are blank, so there is one 0 and empty space past it
+        const lo1 = cur > 0 ? Math.max(0, nextStop(cur, -1, u, big)) : null;
+        const lo2 = lo1 != null && lo1 > 0 ? Math.max(0, nextStop(lo1, -1, u, big)) : null;
+        const hi1 = nextStop(cur, 1, u, big), hi2 = nextStop(hi1, 1, u, big);
+        colRows = [lo2, lo1, cur, hi1, hi2];
+        colList.innerHTML = colRows.map(function (x, i) { return "<div" + (i === 2 ? " class=\"on\"" : "") + ">" + (x == null ? "" : fmtAmount(x, u)) + "</div>"; }).join("");
+        bubble.textContent = fmtAmount(cur, u) + " " + u;
+        updateCol();
+      }
+      // slide the list by the travel not yet turned into a notch, so the numbers move with the finger
+      function updateCol() {
+        if (!col || !col.classList.contains("show")) return;
+        const frac = Math.max(-1, Math.min(1, acc / colPx));            // −1..1 of the way to the next row
+        colList.style.transform = "translateY(" + (-colRowH - frac * colRowH - over) + "px)";   // minus over: pulled past 0 = list slides down
+      }
+      function hideBubbleSoon() { clearTimeout(bubbleHide); bubbleHide = setTimeout(function () { if (bubble) { bubble.classList.remove("show"); col.classList.remove("show"); } }, WHEEL_LINGER_MS); }
+      function draw() {
+        if (col && col.classList.contains("show")) renderCol();
+        wheel.classList.toggle("blank", val === null);
+        if (val === null) { vEl.textContent = opts.placeholder || "amount"; gUp.textContent = ""; gDn.textContent = ""; return; }
+        const u = unitNow();
+        vEl.textContent = txt != null ? txt : fmtAmount(val, u);
+        // lower stop above, higher below: dragging up slides the list up and the higher number into the band (iOS order)
+        gUp.textContent = val > 0 ? fmtAmount(Math.max(0, nextStop(val, -1, u, false)), u) : ""; gDn.textContent = fmtAmount(nextStop(val, 1, u, false), u);
+      }
+      function setText(v) {
+        v = v == null ? "" : String(v).trim();
+        if (v === "") { val = null; txt = null; draw(); return; }
+        const n = parseAmount(v);
+        val = Math.max(0, Math.round(n * 1000) / 1000);
+        // keep her exact text only when the wheel's own reading would change the number ("2-3"); a learned
+        // "0.75" cups reads 3/4, never a decimal
+        txt = Math.abs(parseAmount(fmtAmount(val, unitNow())) - n) < 0.01 ? null : v;
+        exact = { amount: val, unit: unitNow(), uses: 0 };
+        draw();
+      }
+      // one notch: dir is +1/-1, big is true for a fast notch. Either way it lands on the unit's grid
+      // (the next quarter cup, the next 5 g), never on a value between.
+      function step(dir, big) {
+        const cur = val === null ? 0 : val;
+        val = Math.max(0, nextStop(cur, dir, unitNow(), big)); txt = null;
+        exact = { amount: val, unit: unitNow(), uses: 0 }; draw();
+      }
+      setText(initial);
+      shownUnit = unitNow();
+
+      // double-tap, press-and-hold, or .focus() to type an exact amount
+      function beginEdit() {
+        if (wheel.classList.contains("editing")) return;
+        const inp = document.createElement("input");
+        inp.type = "text"; inp.inputMode = "decimal"; inp.className = "wheel-edit"; inp.value = wheel.value;
+        wheel.classList.add("editing"); wheel.appendChild(inp);
+        inp.focus(); inp.select();
+        let submit = false;
+        function commit() {
+          setText(inp.value);
+          // take the input out a tick later: removing it inside blur would swallow the focusout that a row
+          // being edited listens for, so the row would never close
+          setTimeout(function () { inp.remove(); wheel.classList.remove("editing"); if (submit && opts.onEnter) opts.onEnter(); }, 0);
+        }
+        inp.addEventListener("blur", commit);
+        inp.addEventListener("keydown", function (e) {
+          if (e.key === "Enter") { e.preventDefault(); submit = true; inp.blur(); }
+          else if (e.key === "Escape") { inp.value = wheel.value; inp.blur(); }
+        });
+      }
+
+      // drag: every WHEEL_STEP_PX of finger travel is one notch; how fast the finger is moving decides 5 or 1.
+      // vel is the smoothed finger speed in px per ms, signed (up = positive); acc is travel not yet turned into notches
+      let dragging = false, moved = false, travel = 0, lastY = 0, lastT = 0, acc = 0, vel = 0, lastTap = 0, idle = null, coast = 0;
+      let holdTimer = null;   // press-and-hold (finger still for 450ms) opens typing, same as a double-tap
+      function cancelHold() { clearTimeout(holdTimer); holdTimer = null; }
+      // fast = stepping in fives. It switches on above WHEEL_FAST_DRAG and only switches off well below it, so the
+      // natural slow-down at the end of a flick keeps landing on multiples of five; a deliberately slow drag goes by one.
+      let fast = false, downT = 0;
+      // past 0 the list does not keep scrolling: it gives a little with resistance (rubber band) and springs back
+      let over = 0, atFloor = false;   // over ≤ 0: how far (px) the list is pulled past 0
+      function bounceBack() {
+        atFloor = false;
+        if (!over) return;
+        over = 0;
+        if (colList) { colList.style.transition = "transform .3s cubic-bezier(.25, 1.25, .4, 1)"; updateCol(); setTimeout(function () { colList.style.transition = ""; }, 320); }
+      }
+      function feed(dy, freeze) {                        // turn finger (or coasting) travel into notches
+        const gentle = !!(WHEEL_STEPS[unitNow()] || WHEEL_STEPS.g).gentle;
+        // at 0 and still pulling down: rubber-band instead of stepping (dy < 0 is a downward pull)
+        if ((val === null || val <= 0) && dy < 0 && acc <= 0) {
+          acc = 0; over = Math.max(-WHEEL_OVERPULL, over + dy * 0.3); atFloor = true; updateCol(); return;
+        }
+        // pulling back up while stretched: take up the slack first
+        if (over < 0 && dy > 0) { over = Math.min(0, over + dy); updateCol(); return; }
+        if (gentle) fast = false;                        // cups and spoons: every notch is a slow one
+        else if (!freeze) {
+          // the first move right after the finger lands reads as a huge speed (tiny dt), so fives need 50ms of real dragging
+          if (!fast && Math.abs(vel) > WHEEL_FAST_DRAG && lastT - downT > 50) fast = true;
+          else if (fast && Math.abs(vel) < WHEEL_FAST_DRAG * 0.3) fast = false;
+        }
+        // travel per notch: fraction units the most, a slow drag by ones next, a fast drag the least
+        const px = gentle ? WHEEL_STEP_PX * 3 : (fast ? WHEEL_STEP_PX : WHEEL_STEP_PX_SLOW);
+        colPx = px;
+        acc += dy;
+        while (Math.abs(acc) >= px) {
+          step(Math.sign(acc), fast);
+          acc -= Math.sign(acc) * px;
+        }
+        updateCol();
+      }
+      // fraction units are rate-limited: one notch, then a pause, so a flick or a trackpad swipe cannot race
+      // through quarters and thirds (trackpads throw off hundreds of scroll units with inertia)
+      let lastNotchT = 0;
+      function gentleTick() {
+        const now = performance.now();
+        if (now - lastNotchT < WHEEL_GENTLE_MS) return false;
+        lastNotchT = now; return true;
+      }
+      function stopCoast() { if (coast) { cancelAnimationFrame(coast); coast = 0; wheel.classList.remove("grabbing"); hideBubbleSoon(); } }
+      // The grown column is a touch surface too (with an invisible margin, see .wheel-col.show::before), and it
+      // lingers after the wheel stops, so a quick second flick or a catch mid-coast that lands just outside the
+      // small box still drives the wheel instead of tapping the page (Claire, 2026-09-12).
+      function onDown(e) {
+        if (wheel.classList.contains("editing")) return;   // let the input take clicks
+        e.preventDefault();                                 // a mouse drag must not select text across the page
+        stopCoast();                                        // a touch catches a coasting wheel, like a real one
+        dragging = true; moved = false; travel = 0; acc = 0; vel = 0; fast = false; over = 0; atFloor = false; lastY = e.clientY; lastT = downT = e.timeStamp;
+        if (colList) colList.style.transition = "";
+        try { wheel.setPointerCapture(e.pointerId); } catch (err) {}
+        wheel.classList.add("grabbing"); showBubble();
+        cancelHold();
+        holdTimer = setTimeout(function () {
+          if (!dragging || moved) return;
+          dragging = false; wheel.classList.remove("grabbing"); hideBubbleSoon();
+          try { wheel.releasePointerCapture(e.pointerId); } catch (err) {}
+          beginEdit();
+        }, 450);
+      }
+      wheel.addEventListener("pointerdown", onDown);
+      function onMove(e) {
+        if (!dragging) return;
+        const dy = lastY - e.clientY, dt = Math.max(1, e.timeStamp - lastT);   // drag up = increase
+        const first = lastT === downT;
+        lastY = e.clientY; lastT = e.timeStamp;
+        // smoothed, but quick to notice a flick (a thumb's flick is short). The very first move after the finger
+        // lands is skipped: its dt is tiny, so it reads as a huge speed and would poison the average.
+        if (!first) vel = vel * 0.4 + (dy / dt) * 0.6;
+        travel += Math.abs(dy); if (travel > 3) { moved = true; cancelHold(); }
+        feed(dy);
+      }
+      wheel.addEventListener("pointermove", onMove);
+      // momentum: after a flick the wheel keeps turning and slows down, the way iOS and Android wheels do.
+      // The notch size is frozen at lift: a fast flick coasts in fives and stops on a multiple of five.
+      function startCoast() {
+        let prev = performance.now();
+        function tick(now) {
+          const dt = Math.min(50, now - prev); prev = now;
+          feed(vel * dt, true);
+          if (atFloor) { stopCoast(); bounceBack(); return; }          // ran into 0: stop and spring back
+          vel *= Math.pow(WHEEL_FRICTION, dt);
+          if (Math.abs(vel) < 0.02) { stopCoast(); return; }
+          coast = requestAnimationFrame(tick);
+        }
+        wheel.classList.add("grabbing");
+        coast = requestAnimationFrame(tick);
+      }
+      function endDrag(e) {
+        cancelHold();
+        if (!dragging) return;
+        dragging = false; wheel.classList.remove("grabbing"); hideBubbleSoon();
+        if (over) { bounceBack(); moved = true; }
+        if (!moved) {                                    // a tap (not a drag)
+          const now = Date.now();
+          if (now - lastTap < 320) { lastTap = 0; beginEdit(); }   // double-tap → type it
+          else lastTap = now;
+          return;
+        }
+        // a finger that paused before lifting is a stop, not a flick
+        const stale = e && e.type === "pointerup" && e.timeStamp - lastT > 100;
+        if (!stale && Math.abs(vel) > WHEEL_FLING) { vel = Math.sign(vel) * Math.min(Math.abs(vel), WHEEL_MAX_FLING); startCoast(); }
+      }
+      wheel.addEventListener("pointerup", endDrag);
+      wheel.addEventListener("pointercancel", endDrag);
+
+      // mouse / trackpad scroll: same idea, measured in scroll-delta instead of finger travel
+      let sAcc = 0, sLastT = 0, sSpeed = 0;
+      wheel.addEventListener("wheel", function (e) {
+        if (wheel.classList.contains("editing")) return;
+        e.preventDefault();
+        const now = e.timeStamp, dt = Math.max(1, now - sLastT); sLastT = now;
+        sSpeed = dt > 300 ? Math.abs(e.deltaY) / dt : sSpeed * 0.6 + (Math.abs(e.deltaY) / dt) * 0.4;   // a fresh scroll starts cold
+        const gentle = !!(WHEEL_STEPS[unitNow()] || WHEEL_STEPS.g).gentle;
+        const per = gentle ? WHEEL_STEP_SCROLL * 3 : WHEEL_STEP_SCROLL;   // fraction units: slower, never a fast notch
+        sAcc += -e.deltaY;                                // scroll up = increase
+        while (Math.abs(sAcc) >= per) {
+          if (gentle && !gentleTick()) { sAcc = 0; break; }       // same pause between notches as a finger drag
+          step(Math.sign(sAcc), !gentle && sSpeed > WHEEL_FAST_SCROLL);
+          sAcc -= Math.sign(sAcc) * per;
+        }
+        wheel.classList.add("grabbing"); showBubble();    // flash the enlarge + bar while scrolling
+        clearTimeout(idle); idle = setTimeout(function () { wheel.classList.remove("grabbing"); hideBubbleSoon(); }, 260);
+      }, { passive: false });
+
+      // keyboard: arrows nudge by one, Enter opens typing (the wheel is focusable so a tap on it keeps
+      // focus inside a row being edited instead of dropping it to the page)
+      wheel.tabIndex = 0;
+      wheel.addEventListener("keydown", function (e) {
+        if (wheel.classList.contains("editing")) return;
+        if (e.key === "ArrowUp") { e.preventDefault(); step(1, false); }
+        else if (e.key === "ArrowDown") { e.preventDefault(); step(-1, false); }
+        else if (e.key === "Enter") { e.preventDefault(); beginEdit(); }
+      });
+
+      Object.defineProperty(wheel, "value", {
+        get: function () { return val === null ? "" : (txt != null ? txt : fmtAmount(val, unitNow())); },
+        set: function (v) { setText(v); }
+      });
+      wheel.focus = beginEdit;
+      // call after the unit beside it changes: the number becomes its closest equivalent in the new unit
+      // (200 g of flour → 1 2/3 cups → 1.6 dl…), snapped to that unit's grid, then the ghosts and format follow
+      wheel.redraw = function () {
+        const u = unitNow();
+        if (shownUnit && u !== shownUnit && val !== null && val > 0) {
+          const name = opts.name ? opts.name() : "";
+          // convert from the remembered exact number while the memory lasts, else from what is showing
+          let from = { amount: val, unit: shownUnit };
+          if (exact && exact.uses < 2) { from = exact; exact.uses++; } else exact = null;
+          const c = convertAmount(from.amount, from.unit, u, name);
+          if (c != null) val = snapTo(Math.round(c * 1000) / 1000, u);
+          else { val = 0; exact = null; }   // no sensible conversion (a count, or an unknown ingredient): start over at 0
+          txt = null;
+        }
+        shownUnit = u; draw();
+      };
+      return wheel;
+    }
+
+    // the amount and unit a library card starts on: what you used last, else a sensible default
+    function libraryQtyFor(entry) {
+      const parsed = Math.round(parseAmount(entry.amount) * 100) / 100;   // two decimals, so "1/3" reads 0.33 not 0.3333333333333333
+      const learned = parsed > 0 ? parsed : NaN;   // no number in what you typed (or 0) counts as "nothing learned"
+      if (!isNaN(learned) && entry.unit) return { amount: learned, unit: entry.unit };
+      const d = defaultQtyFor(entry.name);
+      return { amount: isNaN(learned) ? d.amount : learned, unit: entry.unit || d.unit };
     }
     // Press-and-hold a step button to keep changing fast (accelerates the longer you hold).
     function attachHold(btn, action) {
@@ -1033,74 +1659,21 @@
     });
 
     function renderLibrary(gridEl, term, onAdd) {
-      const t = (term || "").trim().toLowerCase();
-      const shown = getLibrary().filter(function (n) { return t === "" || n.indexOf(t) !== -1; });
+      // matches on the entry's name and its cleaned-up key, so "ap" still finds "all purpose flour"
+      const shown = getLibrary().filter(function (e) { return bbIngredientMatches(e, term); });
       gridEl.innerHTML = "";
-      shown.forEach(function (name) {
+      shown.forEach(function (entry) {
+        const name = entry.name;
         const card = document.createElement("div"); card.className = "lib-card";
         const nm = document.createElement("div"); nm.className = "lib-name"; nm.textContent = name;
         const ctr = document.createElement("div"); ctr.className = "lib-controls";
-        // amount: an iOS-style wheel — flick/drag up to increase, down to decrease
-        const wheel = document.createElement("div"); wheel.className = "wheel";
-        const gUp = document.createElement("span"); gUp.className = "wheel-ghost";
-        const vEl = document.createElement("span"); vEl.className = "wheel-val";
-        const gDn = document.createElement("span"); gDn.className = "wheel-ghost";
-        wheel.appendChild(gUp); wheel.appendChild(vEl); wheel.appendChild(gDn);
-        const q0 = defaultQtyFor(name);                     // realistic starting amount + unit for THIS ingredient
-        let val = q0.amount;
-        function drawWheel() { vEl.textContent = val; gUp.textContent = val + 1; gDn.textContent = Math.max(0, val - 1); }
-        function setVal(v) { val = Math.max(0, Math.round(v)); drawWheel(); }
-        drawWheel();
-        let startY = 0, startVal = 0, dragging = false, moved = false, lastTap = 0, wheelIdle = null;
-        // double-tap the wheel to type an exact amount
-        function beginEdit() {
-          const inp = document.createElement("input");
-          inp.type = "text"; inp.inputMode = "decimal"; inp.className = "wheel-edit"; inp.value = val;
-          wheel.classList.add("editing"); wheel.appendChild(inp);
-          inp.focus(); inp.select();
-          function commit() {
-            const v = parseFloat(inp.value);
-            if (!isNaN(v)) val = Math.max(0, v);
-            inp.remove(); wheel.classList.remove("editing"); drawWheel();
-          }
-          inp.addEventListener("blur", commit);
-          inp.addEventListener("keydown", function (e) {
-            if (e.key === "Enter") { e.preventDefault(); inp.blur(); }
-            else if (e.key === "Escape") { inp.value = val; inp.blur(); }
-          });
-        }
-        wheel.addEventListener("pointerdown", function (e) {
-          if (wheel.classList.contains("editing")) return;   // let the input take clicks
-          dragging = true; moved = false; startY = e.clientY; startVal = val;
-          wheel.setPointerCapture(e.pointerId); wheel.classList.add("grabbing");
-        });
-        wheel.addEventListener("pointermove", function (e) {
-          if (!dragging) return;
-          const dy = startY - e.clientY;                   // drag up = increase
-          if (Math.abs(dy) > 3) moved = true;
-          const mag = Math.pow(Math.abs(dy) / 5, 1.3);     // fine near center, fast on a big flick
-          setVal(startVal + Math.sign(dy) * mag);
-        });
-        function endDrag() {
-          if (!dragging) return;
-          dragging = false; wheel.classList.remove("grabbing");
-          if (!moved) {                                    // a tap (not a drag)
-            const now = Date.now();
-            if (now - lastTap < 320) { lastTap = 0; beginEdit(); }   // double-tap → type it
-            else lastTap = now;
-          }
-        }
-        wheel.addEventListener("pointerup", endDrag);
-        wheel.addEventListener("pointercancel", endDrag);
-        wheel.addEventListener("wheel", function (e) {
-          e.preventDefault(); setVal(val + (e.deltaY < 0 ? 1 : -1));
-          wheel.classList.add("grabbing");                       // flash the enlarge + bar while scrolling
-          clearTimeout(wheelIdle); wheelIdle = setTimeout(function () { wheel.classList.remove("grabbing"); }, 260);
-        }, { passive: false });
-
-        const unit = makeSelect(UNITS, q0.unit, null, { className: "lib-unit" });
+        const q0 = libraryQtyFor(entry);                    // what you used last for THIS ingredient, else a realistic default
+        let unit;
+        const wheel = bbAmountWheel(q0.amount, { unit: function () { return unit ? unit.value : q0.unit; }, name: function () { return name; } });   // flick, scroll or double-tap to type (shared builder above)
+        unit = bbUnitPicker(q0.unit, function () { wheel.redraw(); }, { className: "lib-unit" });
+        wheel.redraw();
         const add = document.createElement("button"); add.className = "lib-add"; add.type = "button"; add.textContent = "+";
-        add.addEventListener("click", function () { onAdd(String(val), unit.value, name); });
+        add.addEventListener("click", function () { onAdd(wheel.value, unit.value, name); });
         ctr.appendChild(unit); ctr.appendChild(wheel); ctr.appendChild(add);
         card.appendChild(nm); card.appendChild(ctr);
         gridEl.appendChild(card);
@@ -1315,17 +1888,13 @@
     })();
 
     // ---------- recipes tab ----------
-    // photoless tiles get a vintage gingham check tinted by the recipe's name + a monogram letter
-    // all in the warm terracotta/clay/ochre/tan family so the tile + category grids feel on-brand
-    // (was a mixed set with cool blues/greens/pinks that clashed with the terracotta palette)
-    const WARM = ["#D98E6E", "#E5A06B", "#E7C46A", "#CE9585", "#C8926F", "#D3A05B", "#BE6F5D", "#DDB98E", "#CF9A7E", "#C98A76"];
+    // BRAND 2026 — photoless tiles: a cream/greige "lab card" carrying a faint teal measurement-mark
+    // watermark (the identity mark) + the recipe's monogram in teal. Replaces the old warm gingham plaid
+    // (which read "grandma's quilt"); real food photos now carry the warmth, the chrome stays cool.
+    const WARM = ["#EFEDE6", "#ECEEEC", "#EEEBE3", "#EAEEEF", "#EDEBE4", "#E9EDEA", "#EFECE5", "#EBEEEE", "#EDEAE2", "#EAEDEC"];
     function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
-    // a brighter, larger woven-plaid fill for photoless thumbnails (color varies by name / category)
-    function plaidBg(c) {
-      return "repeating-linear-gradient(45deg, " + c + "80 0 15px, transparent 15px 32px)," +
-             "repeating-linear-gradient(135deg, " + c + "52 0 15px, transparent 15px 32px)," +
-             "#FCF8EE";
-    }
+    // clean cream/greige tint (varies subtly by name); the teal monogram letter is the only mark on top
+    function plaidBg(c) { return c; }
     // Cache each hero thumbnail's <img> by URL and REUSE the same already-decoded element across re-renders.
     // renderRecipes() runs on every search keystroke / category switch / return-to-list; building a fresh
     // <img src=remoteURL> each time makes the thumbnail blink while it re-fetches + re-decodes from Storage.
@@ -1415,8 +1984,14 @@
     }
 
     // ---------- first-run onboarding: fix the "empty app on first open" ----------
-    function onboardSeen() { return localStorage.getItem("bakebook.onboardSeen") === "1"; }
-    function markOnboardSeen() { try { localStorage.setItem("bakebook.onboardSeen", "1"); } catch (e) {} }
+    // Keyed per-ACCOUNT (uid), not per-device: a brand-new account — e.g. a freshly (re)created demo /
+    // review login — still gets the welcome + "add sample recipes" offer even on a device where a
+    // different account already dismissed it. (It used to be one global flag, so any new account on an
+    // already-used device opened to an empty app with no way to load the samples.)
+    function obKey() { return "bakebook.onboardSeen." + (localStorage.getItem("bakebook.uid") || "anon"); }
+    function obFlag(base) { return base + "." + (localStorage.getItem("bakebook.uid") || "anon"); }   // account-scoped onboarding flag — matches recipe.html so butter's "learned" flag is shared across pages
+    function onboardSeen() { return localStorage.getItem(obKey()) === "1"; }
+    function markOnboardSeen() { try { localStorage.setItem(obKey(), "1"); } catch (e) {} }
     function makeOnboard() {
       const wrap = document.createElement("div");
       wrap.className = "onboard";
@@ -1650,6 +2225,12 @@
         const input = document.createElement("input");
         input.type = "text"; input.className = "search"; input.value = cat; input.autocomplete = "off";
         row.appendChild(input);
+        // a delete button lives alongside the rename input — long-hold now edits OR deletes the category
+        const del = document.createElement("button"); del.type = "button"; del.textContent = "delete";
+        del.style.cssText = "flex:0 0 auto; padding:0.45rem 0.9rem; border:1px solid var(--warm); color:var(--warm); background:var(--card); border-radius:10px; font-weight:600; cursor:pointer; font-family:var(--body);";
+        del.addEventListener("mousedown", function (e) { e.preventDefault(); });   // keep focus off blur→commit
+        del.addEventListener("click", function () { closed = true; renderRecipes(); deleteCategoryFlow(cat); });
+        row.appendChild(del);
         headBtn.replaceWith(row);
         setTimeout(function () { input.focus(); input.select(); }, 0);
         let closed = false;
@@ -1686,8 +2267,15 @@
     const nameInput = document.getElementById("nameInput");
     const descInput = document.getElementById("descInput");
     const categoryInput = document.getElementById("categoryInput");
-    const ingAmount = document.getElementById("ingAmount");
-    const ingUnit = makeSelect(UNITS, getDefaultUnit(), null, { className: "unit" });
+    // time and serves: tap-to-add lines that open a scrolling sheet (bakebook-meta.js). Same .value contract as
+    // the text boxes they replaced, and they fire "input" on a pick, so the draft-saving below still hears them.
+    const timeInput = bbTimeField(); timeInput.id = "timeInput";
+    const servingsInput = bbServesField(); servingsInput.id = "servingsInput";
+    document.getElementById("tvRow").appendChild(timeInput); document.getElementById("tvRow").appendChild(servingsInput);
+    // amount: the same wheel as the library (flick, scroll, double-tap to type); Enter while typing adds the row
+    const ingUnit = bbUnitPicker(getDefaultUnit(), function () { ingAmount.redraw(); }, { className: "unit" });
+    const ingAmount = bbAmountWheel("", { unit: function () { return ingUnit.value; }, name: function () { return ingName.value; }, onEnter: function () { addIngredientFromInputs(); } });
+    document.getElementById("ingAmountMount").appendChild(ingAmount);
     document.getElementById("ingUnitMount").appendChild(ingUnit);
     const ingName = document.getElementById("ingName");
     const ingredientList = document.getElementById("ingredientList");
@@ -1697,9 +2285,14 @@
     function openCreateForm() {
       const cf = document.getElementById("createForm");
       restoreDraft();                                    // bring back any half-typed recipe so nothing's lost
+      // rebuild the library from the recipes you have right now, so a recipe saved, synced in or deleted
+      // since the last time the form was open shows up (or leaves) straight away
+      renderLibrary(document.getElementById("libraryGrid"), document.getElementById("librarySearch").value, addFromLibrary);
       cf.classList.remove("hidden"); cf.scrollTop = 0;   // full-screen create screen, scrolled to top
     }
-    function closeCreateForm() { document.getElementById("createForm").classList.add("hidden"); }
+    let draftSource = "typed";   // for the event log: "imported" when an import filled this form
+    function closeCreateForm() { draftSource = "typed"; document.getElementById("createForm").classList.add("hidden"); }
+    window.bbCloseCreateForm = closeCreateForm;   // so the Android back gesture (bakebook-back.js) can close the form too
     document.getElementById("newRecipeBtn").addEventListener("click", openCreateForm);
     document.getElementById("createBack").addEventListener("click", closeCreateForm);
 
@@ -1712,8 +2305,9 @@
     function saveDraft() {
       try {
         const d = { name: nameInput.value, description: descInput.value, category: categoryInput.value,
+          time: timeInput.value, servings: servingsInput.value,
           ingredients: draftIngredients, steps: draftSteps };
-        const empty = !d.name && !d.description && !d.category && !d.ingredients.length && !d.steps.length;
+        const empty = !d.name && !d.description && !d.category && !d.time && !d.servings && !d.ingredients.length && !d.steps.length;
         if (empty) { localStorage.removeItem(DRAFT_KEY); return; }   // nothing worth keeping
         localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
       } catch (e) {}
@@ -1723,11 +2317,12 @@
       let d; try { d = JSON.parse(localStorage.getItem(DRAFT_KEY)); } catch (e) { d = null; }
       if (!d) return;
       nameInput.value = d.name || ""; descInput.value = d.description || ""; categoryInput.value = d.category || "";
+      timeInput.value = d.time || ""; servingsInput.value = d.servings || "";
       draftIngredients = Array.isArray(d.ingredients) ? d.ingredients : [];
       draftSteps = Array.isArray(d.steps) ? d.steps : [];
       renderDraftIngredients(); renderDraftSteps();
     }
-    [nameInput, descInput, categoryInput].forEach(function (el) { el.addEventListener("input", saveDraft); });
+    [nameInput, descInput, categoryInput, timeInput, servingsInput].forEach(function (el) { el.addEventListener("input", saveDraft); });
 
     // user-created category names that live in their own synced list (may include empty ones)
     function getStoredCategories() {
@@ -1763,6 +2358,82 @@
       localStorage.setItem("bakebook.categories", JSON.stringify(next));   // setItem syncs to cloud
       // keep the expand/collapse state pinned to the renamed group
       if (expandedCats[oldName]) { delete expandedCats[oldName]; expandedCats[newName] = true; }
+    }
+    // Drop a category from the stored-category list (setItem syncs + tombstones it). Recipe-derived
+    // categories reappear on their own, so this only truly removes empty/created categories.
+    function removeCategoryFromStored(cat) {
+      const key = (cat || "").trim().toLowerCase();
+      const next = getStoredCategories().filter(function (c) { return String(c).trim().toLowerCase() !== key; });
+      localStorage.setItem("bakebook.categories", JSON.stringify(next));
+      if (expandedCats[cat]) delete expandedCats[cat];
+    }
+    // "delete category, keep recipes" — the recipes fall back to uncategorized (category = "").
+    function deleteCategoryKeepRecipes(cat) {
+      const affected = recipes.filter(function (r) { return r.category === cat; }).map(function (r) { return r.id; });
+      if (!affected.length) { deleteEmptyCategory(cat); return; }
+      recipes.forEach(function (r) { if (r.category === cat) r.category = ""; });
+      saveToBrowser(); if (window.bakebookFlush) bakebookFlush();
+      removeCategoryFromStored(cat);
+      renderRecipes();
+      showUndo("category removed", function () {
+        recipes.forEach(function (r) { if (affected.indexOf(r.id) !== -1) r.category = cat; });
+        saveToBrowser(); if (window.bakebookFlush) bakebookFlush();
+        renderRecipes();
+      });
+    }
+    // "delete category AND its recipes" — removes every recipe in the category (plus any variations of
+    // those recipes, mirroring the single-recipe delete), with a full undo.
+    function deleteCategoryAndRecipes(cat) {
+      const idSet = {};
+      recipes.forEach(function (r) { if (r.category === cat) idSet[r.id] = 1; });
+      recipes.forEach(function (r) { if (r.parentId && idSet[r.parentId]) idSet[r.id] = 1; });
+      const removed = recipes.filter(function (r) { return idSet[r.id]; });
+      if (!removed.length) { deleteEmptyCategory(cat); return; }
+      recipes = recipes.filter(function (r) { return !idSet[r.id]; });
+      saveToBrowser(); if (window.bakebookFlush) bakebookFlush();
+      removeCategoryFromStored(cat);
+      renderRecipes();
+      showUndo(removed.length + " recipe" + (removed.length > 1 ? "s" : "") + " removed", function () { restoreRecipes(removed); });
+    }
+    // An empty category (created, no recipes) just leaves the stored list; undo puts it back.
+    function deleteEmptyCategory(cat) {
+      removeCategoryFromStored(cat);
+      renderRecipes();
+      showUndo("category removed", function () {
+        const cats = getStoredCategories();
+        if (!cats.some(function (c) { return String(c).trim().toLowerCase() === (cat || "").trim().toLowerCase(); })) cats.push(cat);
+        localStorage.setItem("bakebook.categories", JSON.stringify(cats));
+        renderRecipes();
+      });
+    }
+    // The whole delete-a-category interaction: no recipes → one confirm; has recipes → a 3-way choice
+    // (keep them / delete them / cancel) followed by a confirmation "either way", per Claire's spec.
+    async function deleteCategoryFlow(cat) {
+      if (!cat || cat === "uncategorized") return;
+      const inCat = recipes.filter(function (r) { return (r.category || "") === cat; });
+      const n = inCat.length, plural = n > 1 ? "s" : "";
+      if (!n) {
+        const ok = await bbConfirm({ title: "delete category?", message: "“" + cat + "” will be removed.", okLabel: "delete", cancelLabel: "cancel", danger: true });
+        if (ok) deleteEmptyCategory(cat);
+        return;
+      }
+      const choice = await bbChoose({
+        title: "delete “" + cat + "”?",
+        message: "this category has " + n + " recipe" + plural + ". what should happen to them?",
+        options: [
+          { label: "keep recipes (move to uncategorized)", value: "keep" },
+          { label: "delete category & its " + n + " recipe" + plural, value: "all", danger: true },
+          { label: "cancel", value: null },
+        ],
+      });
+      if (!choice) return;
+      if (choice === "keep") {
+        const ok = await bbConfirm({ title: "remove category?", message: "“" + cat + "” will be removed; its " + n + " recipe" + plural + " move to uncategorized.", okLabel: "remove category", cancelLabel: "cancel" });
+        if (ok) deleteCategoryKeepRecipes(cat);
+      } else if (choice === "all") {
+        const ok = await bbConfirm({ title: "delete everything?", message: "“" + cat + "” and its " + n + " recipe" + plural + " will be permanently removed.", okLabel: "delete all", cancelLabel: "cancel", danger: true });
+        if (ok) deleteCategoryAndRecipes(cat);
+      }
     }
     // The unique categories the user has — those used by recipes PLUS ones created directly.
     function getCategories() {
@@ -1859,12 +2530,14 @@
     function editDraftIngredient(row, label, index) {
       const ing = draftIngredients[index];
       const wrap = document.createElement("div"); wrap.className = "inline"; wrap.style.flex = "1";
-      const a = document.createElement("input"); a.className = "amount"; a.value = ing.amount; a.inputMode = "decimal";
-      const u = makeSelect(UNITS, ing.unit, null, { className: "unit" });
-      const n = document.createElement("input"); n.className = "iname"; n.value = ing.name;
-      wrap.appendChild(a); wrap.appendChild(u); wrap.appendChild(n);
+      const n = document.createElement("input"); n.className = "iname"; n.value = ing.name; n.placeholder = "ingredient";
+      let u;
+      const a = bbAmountWheel(ing.amount, { className: "amount", unit: function () { return u ? u.value : ing.unit; }, name: function () { return n.value; }, onEnter: function () { commit(); } });
+      u = bbUnitPicker(ing.unit, function () { a.redraw(); }, { className: "unit" });
+      a.redraw();
+      wrap.appendChild(n); wrap.appendChild(u); wrap.appendChild(a);   // same order as the add row: ingredient > unit > amount
       row.replaceChild(wrap, label);
-      a.focus(); a.select();
+      n.focus(); n.select();
       let done = false;
       function commit() {
         if (done) return; done = true;
@@ -1872,8 +2545,7 @@
         renderDraftIngredients();
       }
       wrap.addEventListener("focusout", function (e) { if (!wrap.contains(e.relatedTarget)) commit(); });
-      a.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); n.focus(); } });
-      n.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); commit(); } });
+      n.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); a.focus(); } });
     }
     function renderDraftSteps() {
       stepList.innerHTML = "";
@@ -1910,15 +2582,59 @@
     function addIngredientFromInputs() {
       const amount = ingAmount.value.trim();
       const name = ingName.value.trim();
-      if (amount === "") { bbNotice("add an amount first"); return false; }
       if (name === "") { bbNotice("type an ingredient name"); return false; }
+      if (amount === "") { bbNotice("add an amount"); return false; }
       draftIngredients.push({ amount: amount, unit: ingUnit.value, name: name });
       ingAmount.value = ""; ingName.value = "";
       renderDraftIngredients();
       return true;
     }
     document.getElementById("addIngredient").addEventListener("click", addIngredientFromInputs);
-    ingName.addEventListener("keydown", function (e) { if (e.key === "Enter") addIngredientFromInputs(); });
+    ingName.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); hideIngDropdown(); ingAmount.focus(); }
+      else if (e.key === "Escape") { hideIngDropdown(); }
+    });
+
+    // ---- type-ahead under the ingredient box ----
+    // As you type, up to three likely ingredients from the library appear under the box (same look as the
+    // category dropdown). Tapping one fills the name; if the amount box is still empty it also fills the
+    // amount and unit you used last for it. Typing past the list and pressing + still adds whatever you wrote.
+    const ingDropdown = document.getElementById("ingDropdown");
+    function hideIngDropdown() { ingDropdown.classList.add("hidden"); ingDropdown.innerHTML = ""; }
+    function showIngDropdown() {
+      const typed = ingName.value.trim();
+      if (typed === "") { hideIngDropdown(); return; }
+      const matches = getLibrary().filter(function (e) { return bbIngredientMatches(e, typed); }).slice(0, 3);
+      if (matches.length === 0) { hideIngDropdown(); return; }
+      ingDropdown.innerHTML = "";
+      matches.forEach(function (entry) {
+        const opt = document.createElement("div"); opt.className = "cat-option"; opt.textContent = entry.name;
+        // mousedown (not click) so it runs before the input's blur hides the dropdown
+        opt.addEventListener("mousedown", function (e) {
+          e.preventDefault();
+          ingName.value = entry.name;
+          let filled = false;
+          if (ingAmount.value.trim() === "") {
+            const q = libraryQtyFor(entry);
+            // keep her exact amount text when there is one ("1/2", "0.75"), else the default number
+            ingAmount.value = entry.amount != null && entry.amount !== "" ? String(entry.amount) : String(q.amount);
+            ingUnit.value = q.unit;
+            filled = true;
+          }
+          hideIngDropdown();
+          // focus stays in the name box on purpose: moving it to the + button dropped the keyboard and the
+          // whole screen jumped (Claire, 2026-09-12). Enter or the + button adds the row from here.
+        });
+        ingDropdown.appendChild(opt);
+      });
+      ingDropdown.classList.remove("hidden");
+      // if the list would run under the floating "save recipe" button, scroll the form up so it clears it
+      const btnTop = document.getElementById("saveButton").getBoundingClientRect().top;
+      const listBottom = ingDropdown.getBoundingClientRect().bottom;
+      if (listBottom > btnTop) document.getElementById("createForm").scrollTop += listBottom - btnTop + 8;
+    }
+    ingName.addEventListener("input", showIngDropdown);
+    ingName.addEventListener("blur", function () { setTimeout(hideIngDropdown, 150); });   // a tap elsewhere closes it
 
     function addStepFromInput() {
       const step = stepInput.value.trim();
@@ -1934,7 +2650,8 @@
     document.getElementById("addStep").addEventListener("click", addStepFromInput);
 
     // ---- import a recipe from a photo (Claude vision, same key butter uses) ----
-    const IMPORT_PROMPT = "You are reading one or more photos of a SINGLE recipe — they may be different pages or screenshots of the same recipe, so combine everything into one. Extract it and reply with ONLY a JSON object — no prose, no markdown fences. Shape: {\"name\": string, \"description\": string, \"components\": [{\"name\": string, \"ingredients\": [{\"amount\": string, \"unit\": string, \"name\": string}], \"steps\": [string]}]}. If the recipe has distinct parts (e.g. a cake and a frosting, dough and filling, or multiple named sub-recipes), return one component per part with its name (like \"cake\", \"frosting\"). If it's a single recipe, return one component with an empty name. Prefer these units: g, kg, ml, l, cups, tbsp, tsp, oz, pinch, each. If an amount has no unit (like eggs), use \"each\" with the count in amount. Keep steps concise. If you cannot read a recipe, reply {}.";
+    // The instructions Claude follows for an import live on the server (functions/import-guard.js).
+    // The app only sends the photos or the link.
     const importStatus = document.getElementById("importStatus");
     // import uses the same secure backend as butter — no user API key needed
     const askClaude = firebase.functions().httpsCallable("claude");
@@ -1946,6 +2663,12 @@
       if (!m) return;
       // the butter popup can ask us to open the bakebook+ paywall (it lives on this page, not the iframe)
       if (m.type === "bakebookOpenPaywall") { if (window.bakebookShowPaywall) bakebookShowPaywall(m.reason || ""); return; }
+      // the baker sent their first butter message from the home chat — stop butter's first-run coach bounce for good, account-wide (recipe pages read the same flag on load)
+      if (m.type === "bakebookButterMessageSent") {
+        try { localStorage.setItem(obFlag("bakebook.coach2.butter"), "1"); } catch (e) {}
+        const bfab = document.getElementById("butterBar"); if (bfab) bfab.classList.remove("coach-flash");
+        return;
+      }
       // the home butter chat can ask us to SAVE A NEW recipe (butter's create_recipe, confirmed by the baker)
       if (m.type === "bakebookButterCreate") {
         try {
@@ -1970,10 +2693,25 @@
           }
           recipes.push(rec);
           try { saveToBrowser(); } catch (err) {}                    // persists + syncs
+          if (window.bbLog) bbLog("recipe_created", { recipeId: rec.id, kind: "butter" });
           const go = function () { location.href = "recipe.html?id=" + encodeURIComponent(rec.id); };
           if (window.bakebookFlush) bakebookFlush().then(go, go); else go();   // make sure it reaches the cloud before the recipe page loads
         } catch (err) {
           try { if (e.source) e.source.postMessage({ type: "bakebookButterCreated", ok: false, reason: "couldn't save the recipe." }, "*"); } catch (x) {}
+        }
+        return;
+      }
+      // butter's saved-conversation cloud backup — the embedded popup can't reach Firestore itself
+      // (its iframe auth can be null), so it relays saves/deletes/subscriptions through this page.
+      if (m.type === "bakebookButterConvSave") { if (window.bakebookButterConvStore) bakebookButterConvStore.save(m.entry).catch(function () {}); return; }
+      if (m.type === "bakebookButterConvDelete") { if (window.bakebookButterConvStore) bakebookButterConvStore.remove(m.id).catch(function () {}); return; }
+      if (m.type === "bakebookButterConvSubscribe") {
+        if (window.bakebookButterConvStore && e.source) {
+          const src = e.source;
+          if (window._bbConvUnsub) { try { window._bbConvUnsub(); } catch (x) {} }   // drop any prior listener
+          window._bbConvUnsub = bakebookButterConvStore.subscribe(function (list) {
+            try { src.postMessage({ type: "bakebookButterConvSnapshot", entries: list }, "*"); } catch (x) {}
+          });
         }
         return;
       }
@@ -2076,6 +2814,7 @@
         comps.forEach(function (c) { rec.ingredients = rec.ingredients.concat(c.ingredients); rec.steps = rec.steps.concat(c.steps); });
         recipes.push(rec);
         try { saveToBrowser(); } catch (e) { bbNotice("couldn't save — storage is full. try removing a photo to free up space."); return; }
+        if (window.bbLog) bbLog("recipe_created", { recipeId: rec.id, kind: "imported" });
         // make sure the new recipe reaches the cloud BEFORE the recipe page loads
         const go = function () { location.href = "recipe.html?id=" + encodeURIComponent(rec.id); };
         if (window.bakebookFlush) { bakebookFlush().then(go, go); } else { go(); }
@@ -2083,8 +2822,10 @@
       }
 
       // single recipe → fill the form for review
+      draftSource = "imported";
       if (r.name) nameInput.value = r.name;
       if (r.description) descInput.value = r.description;
+      if (r.time) timeInput.value = r.time; if (r.servings) servingsInput.value = r.servings;   // filled when the importer extracts them
       if (!categoryInput.value.trim()) { const g = guessCategoryFromName(r.name || ""); if (g) categoryInput.value = g; }   // auto-pick a category from the name
       const one = comps[0] || { ingredients: [], steps: [] };
       draftIngredients = one.ingredients.slice();
@@ -2100,17 +2841,12 @@
       let images;
       try { images = await Promise.all(files.map(function (f) { return fileToBase64Resized(f, 1400, 0.8); })); }
       catch (e) { importStatus.textContent = "couldn't read one of those image files."; return; }
-      // one message: every image block first, then the prompt telling butter they're one recipe
-      const content = images.map(function (b64) {
-        return { type: "image", source: { type: "base64", media_type: "image/jpeg", data: b64 } };
-      });
-      content.push({ type: "text", text: IMPORT_PROMPT });
+      // send only the photos; the server adds the instructions telling Claude they're one recipe
       try {
         const result = await askClaude({
-          body: {
-            model: localStorage.getItem("bakebook.model") || "claude-haiku-4-5",
-            max_tokens: 1500,
-            messages: [{ role: "user", content: content }]
+          import: {
+            kind: "photo",
+            images: images.map(function (b64) { return { media_type: "image/jpeg", data: b64 }; })
           }
         });
         const data = result.data || {};
@@ -2131,24 +2867,18 @@
     });
 
     // ---- import a recipe from a link (Claude fetches the page server-side; no CORS issue) ----
-    const IMPORT_PROMPT_URL = "Fetch the recipe at the URL above and extract it. Reply with ONLY a JSON object — no prose, no markdown fences. Shape: {\"name\": string, \"description\": string, \"components\": [{\"name\": string, \"ingredients\": [{\"amount\": string, \"unit\": string, \"name\": string}], \"steps\": [string]}]}. If the recipe has distinct parts (e.g. a cake and a frosting, dough and filling, or multiple named sub-recipes), return one component per part with its name (like \"cake\", \"frosting\"). If it's a single recipe, return one component with an empty name. Prefer these units: g, kg, ml, l, cups, tbsp, tsp, oz, pinch, each. If an amount has no unit (like eggs), use \"each\" with the count in amount. Keep steps concise. If you can't fetch the page or find a recipe, reply {}.";
 
     async function importFromURL(url) {
       if (!canAddRecipe()) return;
       importStatus.textContent = "reading the page…";
-      const messages = [{ role: "user", content: "Recipe URL: " + url + "\n\n" + IMPORT_PROMPT_URL }];
+      // `resume` holds what Claude sent back each time the page fetch paused, so the next call picks up
+      // where it stopped. The server writes the instructions and adds the fetch tool itself.
+      const resume = [];
       try {
         for (let i = 0; i < 4; i++) {   // loop only if the server-tool turn pauses
-          const result = await askClaude({
-            body: {
-              model: localStorage.getItem("bakebook.model") || "claude-haiku-4-5",
-              max_tokens: 2000,
-              tools: [{ type: "web_fetch_20250910", name: "web_fetch", max_uses: 5 }],
-              messages: messages
-            }
-          });
+          const result = await askClaude({ import: { kind: "link", url: url, resume: resume } });
           const data = result.data || {};
-          if (data.stop_reason === "pause_turn") { messages.push({ role: "assistant", content: data.content }); continue; }
+          if (data.stop_reason === "pause_turn") { resume.push(data.content); continue; }
           const text = (data.content || []).filter(function (b) { return b.type === "text"; }).map(function (b) { return b.text; }).join("\n");
           const parsed = parseRecipeJSON(text);
           if (!parsed) { importStatus.textContent = "couldn't pull a recipe from that link — some sites block it. try the photo import."; return; }
@@ -2183,12 +2913,33 @@
     })();
     stepInput.addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addStepFromInput(); } });   // Enter adds the step; Shift+Enter = newline
 
+    // background: map which ingredients each step of a NEW recipe uses, so cook-mode can show only the
+    // relevant ones. Cheap Haiku call on its own Cloud Function path (doesn't touch the butter limit);
+    // fails soft (recipe just keeps no map → cook mode shows all).
+    function mapNewRecipeSteps(rec) {
+      const ings = (rec.ingredients || []).filter(function (x) { return x && (x.name || "").trim(); }).map(function (x) { return x.name.trim(); });
+      const steps = (rec.steps || []).filter(function (s) { return s && String(s).trim(); }).map(function (s) { return String(s).trim(); });
+      if (ings.length < 2 || steps.length < 1) return;
+      firebase.functions().httpsCallable("mapStepIngredients")({ ingredients: ings, steps: steps }).then(function (res) {
+        const map = (res && res.data && Array.isArray(res.data.steps)) ? res.data.steps : null;
+        if (!map || map.length !== steps.length) return;
+        rec.stepIngredients = map; rec.stepIngHash = JSON.stringify([ings, steps]);
+        saveToBrowser();
+      }).catch(function () {});
+    }
+
     // ---- library wiring (adds into the new-recipe draft) ----
     function addFromLibrary(amount, unit, name) {
       if (amount === "") { bbNotice("set an amount first"); return; }
       draftIngredients.push({ amount: amount, unit: unit, name: name });
       renderDraftIngredients();
     }
+    // the library starts folded; the heading opens and closes it
+    document.getElementById("libraryToggle").addEventListener("click", function () {
+      const open = this.getAttribute("aria-expanded") === "true";
+      this.setAttribute("aria-expanded", open ? "false" : "true");
+      document.getElementById("libraryBody").classList.toggle("hidden", open);
+    });
     document.getElementById("librarySearch").addEventListener("input", function () {
       renderLibrary(document.getElementById("libraryGrid"), this.value, addFromLibrary);
     });
@@ -2202,21 +2953,28 @@
       if (stepInput.value.trim() !== "") { addStepFromInput(); }
 
       const now = Date.now();
-      recipes.push({
+      const newRec = {
         id: "r" + now + Math.random().toString(36).slice(2, 7),
         name: name,
         description: descInput.value.trim(),
         category: canonicalCategory(categoryInput.value.trim()),
+        time: timeInput.value.trim(),
+        servings: servingsInput.value.trim(),
         ingredients: draftIngredients,
         steps: draftSteps,
         photos: [],
         logs: [],
         createdAt: now,
         updatedAt: now
-      });
+      };
+      recipes.push(newRec);
       saveToBrowser();
+      if (window.bbLog) bbLog("recipe_created", { recipeId: newRec.id, kind: draftSource });
+      draftSource = "typed";
+      mapNewRecipeSteps(newRec);   // background: map which ingredients each step uses (for cook mode)
 
       nameInput.value = ""; descInput.value = ""; categoryInput.value = "";
+      timeInput.value = ""; servingsInput.value = "";
       draftIngredients = []; draftSteps = [];
       clearDraft();   // the draft became a real recipe — forget it so the next "new recipe" starts blank
       renderDraftIngredients(); renderDraftSteps();
@@ -2245,9 +3003,28 @@
       recipes.forEach(normalizeRecipe);
       canonicalizeAllCategories();   // merge any case-duplicate categories synced in from another device (no-op if none)
       renderRecipes();   // redraw the home list in place (keeps the current sort, incl. "by category")
+      // the ingredient library is learned from the recipes, so it needs the same redraw (matters most on a
+      // fresh device, where the form can already be open when the cloud copy lands)
+      renderLibrary(document.getElementById("libraryGrid"), document.getElementById("librarySearch").value, addFromLibrary);
     }
     if (window.bakebookWhenReady) bakebookWhenReady(refreshFromStore);
     if (window.bakebookOnChange) bakebookOnChange(refreshFromStore);   // live updates from other devices
+
+    // Paint straight away when this device was signed in last time. Coming back from a recipe (or any page)
+    // reloads this page, and waiting for Firebase to confirm the login showed a cream screen with the
+    // wordmark for a moment on every return (Claire, 2026-09-12). The recipe list is already in localStorage
+    // (the store scopes it to the signed-in account), so draw it now; onAuthStateChanged still runs and
+    // swaps to the login screen in the rare case the session is gone.
+    (function () {
+      let remembered = false;
+      try { remembered = localStorage.getItem("bakebook.signedIn") === "1" && !!localStorage.getItem("bakebook.uid"); } catch (e) {}
+      const boot = document.getElementById("bootScreen");
+      if (!remembered || !boot) return;
+      boot.remove();
+      document.getElementById("loginScreen").classList.add("hidden");
+      document.getElementById("appRoot").classList.remove("hidden");
+      try { showTab(); } catch (e) {}
+    })();
   </script>
 
   <script>
@@ -2267,6 +3044,7 @@
         if (window.bbLockScroll) window.bbLockScroll("butter");   // freeze the page behind the sheet
       }
       function closeButter() { if (window.bbUnlockScroll) window.bbUnlockScroll("butter"); sheet.classList.add("hidden"); panel.style.transition = ""; panel.style.transform = ""; }
+      window.bbCloseButter = closeButter;   // so the Android back gesture (bakebook-back.js) can close the popup too
 
       // ---- butter bubble: drag to move, fling past an edge to tuck it off-screen, tap to bring it back ----
       const KEY = "bakebook.butter.pos", MARGIN = 12;
@@ -2293,6 +3071,9 @@
       }
       applyPos();
       window.addEventListener("resize", applyPos);
+
+      // first-run coach bounce: flash butter here too until the baker sends their first message (cleared account-wide from any page)
+      if (!localStorage.getItem(obFlag("bakebook.coach2.butter"))) bar.classList.add("coach-flash");
 
       bar.addEventListener("pointerdown", function (e) {
         bdown = true; bmoved = false; bsx = e.clientX; bsy = e.clientY;

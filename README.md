@@ -1,99 +1,135 @@
 <div align="center">
 
-# 🧈 bakebook
+<img src="bakebook/wordmark.svg" alt="bakebook" width="260">
 
-### A recipe **development & storage** app — store your recipes, then actually make them better.
+**A recipe app for people who change their recipes.**
 
-**[▶ Live demo](https://bakebook-gz9v92.web.app)** &nbsp;·&nbsp; iOS (App Store — coming soon) &nbsp;·&nbsp; Android (in progress)
-
-*Built solo, from idea to a live, full-stack, AI-powered app.*
+[App Store](https://apps.apple.com/us/app/bakebook-recipe-lab/id6791304387) · Google Play (rolling out) · [bakebook.co](https://bakebook.co)
 
 </div>
-
----
 
 ## What it is
 
-Most recipe apps are just cookbooks — a place to **store** recipes. bakebook adds the part
-serious home bakers actually want: a place to **develop** them. Scale any recipe, track every
-bake in a logbook, organize with categories, and work with **butter**, an AI baking assistant that
-answers questions and can even edit a recipe with you — all while your originals stay safe.
+bakebook stores your recipes, then helps you develop them.
 
-> **"store. develop. bake."**
+Most recipe apps stop at storage. Bakers who test and adjust need more. In bakebook you can
+change a ratio, log how the bake came out, and build the next version on what the last one
+taught you.
 
-## ✨ Features
+- **Store.** One list, or categories you name. Search, sort, and drag a recipe between categories.
+- **Develop.** Split a recipe into parts (cake, frosting, filling). Scale to any yield. Switch
+  between grams and cups. Save a variation as its own recipe, linked to the original.
+- **Bake.** Make-it mode shows one step at a time, with only the ingredients that step uses.
+- **Log.** Each bake gets a dated note: what changed, how it turned out, what to try next.
+- **Ask butter.** butter is an AI baking assistant that has read the recipe on screen. It
+  answers questions and proposes edits. You see every change before you apply it.
+- **Import and share.** Paste a link or photograph a page to bring a recipe in. Send any recipe
+  as a link that opens without an account.
 
-- **📖 Recipe library** — store, search, and organize recipes into categories (drag-to-file, rename, auto-dedupe).
-- **🔬 Develop & iterate** — scale ingredients (1×/2×/custom, cups↔grams), spin off **variations** without touching the original, and break recipes into **components** (e.g. cake + frosting).
-- **🧈 butter, the AI assistant** — chat about any recipe (substitutions, ratios, technique, troubleshooting); butter can propose and apply edits, powered by **Claude** via a secure server proxy (the API key never touches the client).
-- **👩‍🍳 make-it mode** — a full-screen, step-by-step baking view with swipe/scrub navigation and per-step notes.
-- **📓 Logbook** — record what you changed each bake and how it turned out.
-- **☁️ Sync** — your recipes follow your account across devices.
-- **💳 Subscriptions** — a free tier plus **bakebook+**, handled through RevenueCat + Apple.
+bakebook is free, with an optional subscription (bakebook+) for more recipes and more butter.
 
-## 📸 Screenshots
+## Status
 
-| butter chat | develop a recipe | make-it mode | library |
-|---|---|---|---|
-| ![butter](docs/screenshots/01-butter-chat.png) | ![develop](docs/screenshots/02-butter-develops-recipe.png) | ![make-it](docs/screenshots/04-bake-mode.png) | ![library](docs/screenshots/05-recipe-library.png) |
-
-## 🏗️ Tech stack
-
-| Layer | Tech |
+| Platform | State |
 |---|---|
-| **Frontend** | Vanilla **HTML / CSS / JavaScript** (no framework — deliberate, for speed + full control) |
-| **Mobile** | **Capacitor** (wraps the web app for iOS; Android in progress) |
-| **Backend** | **Firebase** — Hosting, Auth, Firestore, Cloud Storage, Cloud Functions |
-| **AI** | **Claude (Anthropic)** via a Cloud Function proxy (server-side key, content-safety checks) |
-| **Payments** | **RevenueCat** (auto-renewing subscriptions, server-verified via webhook) |
-| **Testing** | Custom **Playwright + WebKit** automated dev→test agent loop (see below) |
+| iOS | Live on the [App Store](https://apps.apple.com/us/app/bakebook-recipe-lab/id6791304387) since September 2026 |
+| Android | Submitted to Google Play production, rolling out |
+| Web | [bakebook.co](https://bakebook.co) |
 
-## 🔩 Architecture
+## Screenshots
+
+| Library | butter proposes an edit | Make-it mode | Versions and notes |
+|---|---|---|---|
+| ![Recipe library with photos](screenshots/1-library.png) | ![butter shows a recipe edit to apply or skip](screenshots/2-butter-edit.png) | ![One step at a time, with that step's ingredients](screenshots/3-make-it.png) | ![A recipe with its variations and an ingredient note](screenshots/4-versions.png) |
+
+## Stack
+
+| Layer | What it uses |
+|---|---|
+| App | Plain HTML, CSS and JavaScript. No framework. |
+| Phone apps | Capacitor 8, which wraps the web app as a native iOS and Android app |
+| Backend | Firebase: Hosting, Auth, Firestore (the database), Cloud Storage (photos), Cloud Functions (server code) |
+| AI | Claude (Anthropic), reached only through a Cloud Function |
+| Subscriptions | RevenueCat, on top of Apple and Google billing |
+| Type and colour | Source Code Pro and Source Sans 3. Teal `#007E9C`, charcoal, cream. |
+
+## How it is built
+
+There are three layers.
+
+1. **The app.** The pages in `bakebook/` are the whole app. The same files run on the web, on
+   iPhone and on Android.
+2. **The wrapper.** Capacitor packages those pages into a native app shell for each store.
+3. **The backend.** Firebase holds accounts, recipes and photos, and runs the server code in
+   `functions/`.
 
 ```mermaid
 flowchart LR
-  U[User: web / iOS / Android] -->|HTML·CSS·JS| APP[bakebook web app<br/>Capacitor shell]
-  APP -->|Auth, data, photos| FB[(Firebase<br/>Auth · Firestore · Storage · Hosting)]
-  APP -->|"ask butter"| CF[Cloud Function proxy]
-  CF -->|server-side key| CL[Claude API]
+  U[Baker on web, iPhone or Android] --> APP[bakebook app<br/>HTML, CSS, JS in Capacitor]
+  APP -->|sign in, recipes, photos| FB[(Firebase)]
+  APP -->|ask butter| CF[Cloud Function]
+  CF -->|key added on the server| CL[Claude]
   APP -->|purchase| RC[RevenueCat]
-  RC -->|webhook: verified receipt| CF2[Cloud Function] --> FB
+  RC -->|confirmed purchase| CF2[Cloud Function] --> FB
 ```
 
-The client never holds a secret: butter's requests go to a Cloud Function that attaches the
-Anthropic key server-side, and premium status is flipped only by a RevenueCat webhook the browser
-can read but never write — a single server-side source of truth.
+A few decisions shape the code:
 
-## 🗂️ Repo layout
+- **Offline first.** Every edit saves on the device first, then syncs to Firestore in the
+  background (`bakebook-store.js`). The book stays usable with no signal. When two devices edit
+  the same recipe, a merge step keeps each device's real changes and never drops a logged bake.
+- **No secrets in the app.** The app never holds the Claude key. It asks a Cloud Function, which
+  adds the key on the server, checks daily limits, and screens messages before the main model
+  answers.
+- **The server decides who has paid.** An account becomes bakebook+ only when RevenueCat confirms
+  the purchase to a Cloud Function. The app can read that status but cannot write it.
+- **Rules guard the data.** `firestore.rules` and `storage.rules` let each account read and
+  write only its own recipes and photos. A shared recipe is readable by anyone with its link.
+
+The Firebase and RevenueCat keys in this copy are placeholders (`YOUR_FIREBASE_WEB_API_KEY` and
+similar). The real ones are public identifiers, but they belong to the live app.
+
+## How I built it
+
+I am a product designer. I built bakebook with Claude Code, Anthropic's coding tool that runs
+in the terminal. I made the product and design calls, and directed and checked the work. Claude
+Code wrote most of the code.
+
+To ship changes safely I set up a test loop, run as a Claude Code command (`/bakeloop`):
+
+1. **Request.** I describe the change. Claude asks questions until it is clear, then writes it
+   down.
+2. **Spec.** Claude writes two specs: one for the developer, one for the tester. I approve them.
+3. **Dev.** A fresh developer agent builds the change on its own git branch.
+4. **Test.** A separate testing agent runs the real app in Playwright with WebKit (the engine
+   behind Safari on iPhone). It clicks through the change, takes screenshots, and writes a PASS
+   or FAIL with evidence.
+5. **Review.** A third agent reads the code change cold, without the developer's notes, and
+   looks for what the tests would miss.
+6. **Sign-off.** I check the result myself before it ships.
+
+The agents share only the written specs and results, never each other's reasoning. A failed
+test goes back to a new developer agent. Each run keeps its specs, screenshots and verdicts.
+About 30 changes have gone through it so far, mostly sync, editing and make-it fixes.
+
+It has limits. A simulated tap is not a finger, so a test can pass a gesture that feels wrong
+on a real phone. Gesture and scroll fixes are confirmed on a device by hand.
+
+## Repo layout
 
 ```
-bakebook/          the web app (HTML/CSS/JS) — the whole client
-functions/         Firebase Cloud Functions (the butter proxy + RevenueCat webhook)
-firestore.rules    Firestore security rules
-storage.rules      Cloud Storage security rules
-firebase.json      Firebase Hosting + emulator config
-capacitor.config.json   Capacitor (mobile wrapper) config
-docs/screenshots/  app screenshots
+bakebook/              the app: every page, script, style and font
+functions/             Cloud Functions: the Claude proxy, import, limits, purchases, account deletion
+firestore.rules        who can read and write which records
+storage.rules          who can read and write which photos
+firebase.json          Firebase hosting and deploy settings
+capacitor.config.json  Capacitor settings for the phone apps
+screenshots/           the images above
 ```
 
-## 🤖 Engineering highlight: an automated dev→test loop
-
-Beyond the app, I built a small **request → spec → develop → test → sign-off** pipeline to ship
-changes safely: a change request is turned into two independent specs, an isolated **development
-agent** implements it on its own git branch, and an isolated **testing agent** drives the real UI
-with **Playwright (WebKit — the same engine as iOS)** and returns an honest PASS/FAIL — the two never
-share reasoning, so the verdict is a genuine independent check. It even taught me where automated
-tests *can't* go (real-finger gesture "feel" is confirmed on a physical device).
-
-## 🗺️ Roadmap
-
-- [x] Live web app + iOS build
-- [ ] App Store release
-- [ ] Android (Google Play)
-- [ ] Deeper recipe-development tooling
+This repo is a public copy for reading. The native iOS and Android projects, the test harness
+and the signing setup live in a private repo.
 
 ---
 
-<div align="center">
-Built by <b>Claire Mull</b> · <a href="https://bakebook-gz9v92.web.app">bakebook-gz9v92.web.app</a> · <a href="https://github.com/clairemullacelia">@clairemullacelia</a>
-</div>
+Built by [Claire Mull](https://clairemull.com) · [@clairemullacelia](https://github.com/clairemullacelia)

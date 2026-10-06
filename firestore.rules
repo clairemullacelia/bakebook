@@ -17,6 +17,46 @@ service cloud.firestore {
       match /meta/{doc} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+      // butter's SAVED/named conversations — one document per saved chat, backing up the local
+      // copy so saved conversations survive app updates, reinstalls, and new devices (the owner
+      // reads/writes their own freely, just like recipes).
+      match /butterConversations/{id} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      // The event log (bakebook-events.js): one small entry per action, e.g. "logged a bake". The owner
+      // may only ADD entries, never read, change or remove them, so the record can't be rewritten from
+      // the browser. Only the listed fields, only the listed names, and the time must be the server's.
+      // The account purge deletes these with everything else under users/{uid}.
+      match /events/{eventId} {
+        allow create: if request.auth != null && request.auth.uid == userId
+          && request.resource.data.keys().hasOnly(["name", "at", "clientAt", "platform", "recipeId", "kind"])
+          && request.resource.data.name in ["recipe_created", "recipe_opened", "bake_logged", "make_it_started",
+                                            "butter_asked", "butter_change_approved", "recipe_shared"]
+          && request.resource.data.at == request.time
+          && request.resource.data.clientAt is int
+          && request.resource.data.platform in ["ios", "android", "web"]
+          && (!("recipeId" in request.resource.data) || (request.resource.data.recipeId is string && request.resource.data.recipeId.size() <= 100))
+          && (!("kind" in request.resource.data) || (request.resource.data.kind is string && request.resource.data.kind.size() <= 30));
+      }
+    }
+
+    // Shared recipes: a recipe the owner chose to share via link. PUBLIC READ — anyone with the
+    // link can view it (that's the whole point of sharing). Only the signed-in OWNER may create or
+    // change/remove a share (matched by ownerUid stored in the doc), so nobody can publish or edit
+    // in someone else's name. These docs are snapshots (name/desc/ingredients/method/photo URLs),
+    // never the user's private control fields.
+    match /shares/{shareId} {
+      allow get: if true;   // anyone with the link can read ONE share; `get` (not `read`) blocks listing the whole collection
+
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerUid;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;
+    }
+
+    // Flagged butter answers. Users report a bad AI response through the "claude" Cloud Function,
+    // which writes here with the admin SDK (that bypasses these rules). Clients must NEVER read or
+    // write this collection directly — it's a private review queue for the team.
+    match /butterFlags/{flagId} {
+      allow read, write: if false;
     }
   }
 }

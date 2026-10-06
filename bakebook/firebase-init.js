@@ -1,12 +1,7 @@
 // bakebook — Firebase connection
-// These are PUBLIC client identifiers (safe to ship in web code) — they only say
-// "which Firebase project to talk to." Data is protected by Firestore/Storage security
-// rules, not by hiding this. (The butter/Anthropic key is a real secret and lives
-// server-side in a Cloud Function — never in the client.)
-//
-// NOTE: in this PUBLIC showcase mirror the values are placeholders. The live app fills
-// in its real Firebase web config (also public by design), locked down with API-key
-// application restrictions in Google Cloud Console.
+// These values are PUBLIC identifiers (safe to ship in web code). They only say
+// "which Firebase project to talk to." Your data is protected by security rules,
+// not by hiding this. (Your butter/Anthropic key is different — that one stays secret.)
 const firebaseConfig = {
   apiKey: "YOUR_FIREBASE_WEB_API_KEY",
   authDomain: "YOUR_PROJECT.firebaseapp.com",

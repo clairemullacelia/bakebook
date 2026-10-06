@@ -1,0 +1,57 @@
+<!-- confirm.html — where the "confirm your email" link lands.
+     Firebase sends EVERY account email (confirm, reset password, ...) to this one address, so this page
+     only handles confirming. Anything else is passed straight on to Firebase's own page, untouched,
+     so the reset-password email keeps working exactly as before. -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>confirm your email · bakebook</title>
+  <link rel="icon" href="wordmark.svg">
+  <script>
+    // not a confirm link? hand it to Firebase's page with the exact same query string, before anything draws
+    if (new URLSearchParams(location.search).get("mode") !== "verifyEmail") {
+      location.replace("https://bakebook-gz9v92.firebaseapp.com/__/auth/action" + location.search);
+    }
+  </script>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html { background: var(--paper); }
+    body { margin: 0 auto; max-width: 480px; box-sizing: border-box; min-height: 100vh; min-height: 100dvh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+      padding: calc(1.5rem + env(safe-area-inset-top, 0px)) 1.5rem calc(1.5rem + env(safe-area-inset-bottom, 0px)); }
+    .wordmark { margin: 0; }
+    .wordmark img { height: 30px; width: auto; display: block; margin: 0 auto 1.6rem; }
+    .msg { font-size: 1.05rem; line-height: 1.5; color: var(--ink); margin: 0 0 1.4rem; min-height: 1.5em; }
+    .open { display: inline-block; font-family: var(--mono); font-weight: 600; font-size: 0.88rem; letter-spacing: 0.3px;
+      color: var(--paper); background: var(--teal); border-radius: 999px; padding: 0.65rem 1.5rem; text-decoration: none;
+      box-shadow: 0 3px 10px rgba(0,126,156,.30); }
+    .open:hover { background: var(--teal-dark); }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h1 class="wordmark"><img src="wordmark.svg" alt="bakebook"></h1>
+  <p class="msg" id="msg" role="status"></p>
+  <a class="open hidden" id="openBtn" href="index.html">open bakebook</a>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="firebase-init.js"></script>
+  <script>
+    (function () {
+      const params = new URLSearchParams(location.search);
+      if (params.get("mode") !== "verifyEmail") return;   // already on its way to Firebase's page
+      const msg = document.getElementById("msg"), btn = document.getElementById("openBtn");
+      function done(text) { msg.textContent = text; btn.classList.remove("hidden"); }
+      const expired = 'that link has expired. open bakebook and tap "resend email" for a new one.';
+      const code = params.get("oobCode");
+      if (!code) { done(expired); return; }
+      firebase.auth().applyActionCode(code)
+        .then(function () { done("your email is confirmed. you're all set."); })
+        .catch(function () { done(expired); });   // expired, already used, or not a real link
+    })();
+  </script>
+</body>
+</html>

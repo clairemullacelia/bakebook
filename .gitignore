@@ -15,3 +15,10 @@ android/
 # os / editor
 .DS_Store
 *.log
+
+# Firebase native config and signing
+google-services.json
+GoogleService-Info.plist
+.secret*
+*.jks
+*.keystore

@@ -12,15 +12,21 @@
   <style>
     html, body { height: 100%; overscroll-behavior: none; }   /* don't let a butter scroll spill into the page behind it */
     body { margin: 0 auto; max-width: 480px; min-height: 100vh; display: flex; flex-direction: column;
-      padding: calc(1rem + env(safe-area-inset-top, 0px)) 1.25rem calc(1rem + env(safe-area-inset-bottom, 0px)); box-sizing: border-box; background: #FFFDF5; }
+      padding: calc(1rem + env(safe-area-inset-top, 0px)) 1.25rem calc(1rem + env(safe-area-inset-bottom, 0px)); box-sizing: border-box; background: #F6F4EE; }
     a.back { color: var(--butter-blue-deep); text-decoration: none; font-size: 0.95rem; }
+    /* bare "home" icon (b + measurement mark), top-right on every deep page — no bubble */
+    .home-btn { position: fixed; top: calc(0.55rem + env(safe-area-inset-top, 0px)); right: 0.95rem; z-index: 140;
+      background: none; border: none; padding: 0.3rem; cursor: pointer; -webkit-tap-highlight-color: transparent;
+      display: flex; align-items: center; justify-content: center; }
+    .home-btn img { height: 1.5rem; width: auto; display: block; }
+    .home-btn:active { opacity: 0.6; }
     h1 { text-align: center; font-size: 1.7rem; margin: 0.25rem 0 0.1rem; }
     .subtitle { text-align: center; color: var(--muted); margin: 0 0 0.75rem; font-size: 0.9rem; }
     input, select, textarea { box-sizing: border-box; padding: 0.45rem 0.8rem; border: 1px solid var(--field-line);
       border-radius: 10px; font-size: 1rem; font-family: inherit; background: var(--card); color: var(--ink); }
     button { cursor: pointer; border: none; border-radius: 999px; }
     .primary { background: var(--terracotta-deep); color: var(--paper); padding: 0.6rem 1.1rem; font-size: 1rem; font-weight: 700; }
-    .primary:hover { background: #8F4634; }
+    .primary:hover { background: #00647C; }
     .topbar { display: flex; justify-content: space-between; align-items: center; }
     .gear { background: none; color: var(--terracotta-deep); font-size: 1.2rem; padding: 0; }
 
@@ -35,39 +41,59 @@
 
     #chat { flex: 1; display: flex; flex-direction: column; min-height: 0; }
     #messages { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 0.5rem 0;
-      scrollbar-width: thin; scrollbar-color: #D8C3A0 transparent; }
+      scrollbar-width: thin; scrollbar-color: #CFC7B8 transparent; }
     /* on-brand scrollbar — the default blended into the cream background (only showed up on red error msgs) */
     #messages::-webkit-scrollbar { width: 8px; }
     #messages::-webkit-scrollbar-track { background: transparent; }
-    #messages::-webkit-scrollbar-thumb { background: #D8C3A0; border-radius: 999px; border: 2px solid #FFFDF5; }
-    #messages::-webkit-scrollbar-thumb:hover { background: #C4A878; }
+    #messages::-webkit-scrollbar-thumb { background: #CFC7B8; border-radius: 999px; border: 2px solid #F6F4EE; }
+    #messages::-webkit-scrollbar-thumb:hover { background: #B8AF9E; }
     .msg { margin: 0.4rem 0; padding: 0.7rem 1rem; border-radius: 8px; max-width: 85%; white-space: pre-wrap; line-height: 1.5; }
     .msg.user { background: var(--terracotta-deep); color: var(--paper); margin-left: auto; border-bottom-right-radius: 4px; }
     /* butter speaks in a smaller italic — her friendly "voice" */
-    .msg.butter { background: #F2E8D5; color: var(--ink); margin-right: auto;
+    .msg.butter { background: #EEEAE0; color: var(--ink); margin-right: auto;
       font-family: var(--body); font-size: 0.95rem; }
     /* change-labels butter puts in **bold** — a hair heavier + the heading tone so a list of
        tweaks reads as a scannable outline (bold name, then plain explanation). */
-    .msg.butter strong { font-weight: 800; color: var(--heading, #5A3E2B); }
+    .msg.butter strong { font-weight: 800; color: var(--heading, #1e1714); }
     .msg.error { background: #faeceb; border: 1px solid #E3B3AC; color: #8a2b20; margin-right: auto; }
-    .msg.typing { background: #F2E8D5; color: var(--muted); font-style: italic; }
+    .msg.typing { background: #EEEAE0; color: var(--muted); font-style: italic; }
+    /* flag control: a quiet ⚑ on each butter answer so a baker can report a bad response. Tapping it
+       records the flag and reveals optional reason chips. Kept subtle so it never competes with the copy. */
+    .flagbar { margin-top: 0.5rem; display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;
+      white-space: normal; font-size: 0.78rem; }
+    .flagbtn { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 2px 4px;
+      font-size: 0.9rem; line-height: 1; opacity: 0.5; border-radius: 5px; transition: opacity 0.15s ease; }
+    .flagbtn:hover, .flagbtn:focus-visible { opacity: 1; outline: none; }
+    .flagbtn:focus-visible { box-shadow: 0 0 0 2px var(--terracotta-deep); }
+    .flagdone { color: var(--muted); font-size: 0.78rem; }
+    .flagprompt { color: var(--muted); }
+    .flagchip { border: 1px solid #D9D3C7; background: none; color: var(--muted); cursor: pointer;
+      border-radius: 999px; padding: 2px 9px; font-size: 0.76rem; line-height: 1.4; transition: all 0.15s ease; }
+    .flagchip:hover, .flagchip:focus-visible { border-color: var(--terracotta-deep); color: var(--ink); outline: none; }
+    .flagchip.sel { background: var(--terracotta-deep); border-color: var(--terracotta-deep); color: var(--paper); }
     /* subtle on-brand "thinking" animation — three warm dots gently rising, so a long reply never reads as "stuck" */
     .think-dots { display: inline-flex; gap: 4px; margin-left: 5px; vertical-align: middle; }
-    .think-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--terracotta-deep, #A5533F);
+    .think-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--terracotta-deep, #007E9C);
       opacity: 0.4; animation: thinkPulse 1.25s ease-in-out infinite; }
     .think-dots i:nth-child(2) { animation-delay: 0.18s; }
     .think-dots i:nth-child(3) { animation-delay: 0.36s; }
     @keyframes thinkPulse { 0%, 65%, 100% { opacity: 0.28; transform: translateY(0); }
       32% { opacity: 0.9; transform: translateY(-3px); } }
     @media (prefers-reduced-motion: reduce) { .think-dots i { animation: none; opacity: 0.5; } }
-    .composer { display: flex; align-items: center; gap: 0.5rem; padding-top: 0.5rem; }
-    .inputwrap { flex: 1; display: flex; align-items: center; gap: 0.65rem;
-      background: var(--card); border: 1.5px solid #EFE7CB; border-radius: var(--pill);
+    /* bottom-aligned so the face and send button stay on the last line while the box grows */
+    .composer { display: flex; align-items: flex-end; gap: 0.5rem; padding-top: 0.5rem; }
+    .inputwrap { flex: 1; display: flex; align-items: flex-end; gap: 0.65rem;
+      background: var(--card); border: 1.5px solid #E4DFD5;
+      /* half the one-line height: a full pill at one line, a rounded rectangle once the box grows */
+      border-radius: 22px;
       padding: 0.45rem 0.9rem; }
     .composer-face { height: 1.15em; flex: none; display: block; }
     .inputwrap textarea { flex: 1; border: none; background: transparent; outline: none; resize: none;
       font-family: var(--body); font-style: italic; font-size: 1rem; color: var(--ink);
-      padding: 0.25rem 0; line-height: 1.35; }
+      padding: 0.25rem 0; line-height: 1.35; min-width: 0;
+      /* grows with the text (see growInput), then scrolls inside itself past 6 lines like Messenger */
+      max-height: calc(1.35em * 6 + 0.5rem); overflow-y: auto; }
+    .composer-face, .sendBtn { margin-bottom: 0.15rem; }
     .inputwrap textarea::placeholder { color: var(--muted); font-style: italic; }
     .inputwrap textarea:focus { box-shadow: none; }
     .sendBtn { flex: none; background: none; border: none; cursor: pointer; padding: 0.2rem;
@@ -75,7 +101,7 @@
     .sendBtn svg { display: block; width: 26px; height: 26px; }
     .hidden { display: none; }
     /* butter's "update recipe?" proposal card — shown when butter wants to edit the recipe */
-    .edit-card { background: #FFF9EC; border: 1.5px solid #E8D9A8; border-radius: 12px; padding: 0.8rem 0.9rem;
+    .edit-card { background: #FDFCFA; border: 1.5px solid #E4DFD5; border-radius: 12px; padding: 0.8rem 0.9rem;
       margin: 0.5rem 0; max-width: 92%; margin-right: auto; box-shadow: var(--shadow-sm); }
     .edit-card h4 { margin: 0 0 0.35rem; font-size: 0.9rem; color: var(--heading); font-weight: 800; }
     .edit-card .es { font-size: 0.88rem; color: var(--ink); margin: 0 0 0.5rem; line-height: 1.4; }
@@ -90,26 +116,38 @@
     .edit-apply { background: var(--terracotta-deep); color: #fff; }
     .edit-done { font-size: 0.85rem; font-weight: 800; color: #3d7a3d; margin: 0; }
     .edit-done.fail { color: #9a3a2c; }
+    /* "show all / show less" expander inside a proposal card — a subtle link that only grows/shrinks
+       the content list; it NEVER touches the skip/apply/save/add/create buttons below it. */
+    .edit-more { display: inline-block; background: none; border: none; padding: 0.15rem 0; margin-top: 0.15rem;
+      color: var(--butter-blue-deep); font-family: var(--body); font-size: 0.8rem; font-weight: 700;
+      text-decoration: underline; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .edit-more:active { opacity: 0.6; }
+    /* inline "undo" beside a settled decline line — a subtle link, mirrors .edit-more. Lets a mistap
+       on "skip" be reversed until the baker sends their next message. */
+    .edit-undo { display: inline; background: none; border: none; padding: 0; margin-left: 0.35rem;
+      color: var(--butter-blue-deep); font-family: var(--body); font-size: 0.8rem; font-weight: 700;
+      text-decoration: underline; cursor: pointer; -webkit-tap-highlight-color: transparent; vertical-align: baseline; }
+    .edit-undo:active { opacity: 0.6; }
     .quota { text-align: center; font-size: 0.72rem; color: var(--muted, #9a8f80);
       padding: 0.15rem 0 0.35rem; letter-spacing: 0.01em; }
     /* embed mode: butter shown inside the home popup — hide its own chrome */
     body.embed { padding-top: 0.5rem; }
-    body.embed .topbar, body.embed h1, body.embed .subtitle { display: none; }
+    body.embed .topbar, body.embed h1, body.embed .subtitle, body.embed .home-btn { display: none; }
 
     /* butter memory toolbar — lives INSIDE the chat so it stays visible in embed mode too */
     .butter-tools { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; padding: 0.1rem 0 0.35rem; }
-    .bt-chip { background: #F2E8D5; color: var(--heading, #5A3E2B); font-family: var(--body); font-size: 0.8rem;
-      font-weight: 700; padding: 0.3rem 0.75rem; border-radius: 999px; border: 1px solid #E8D9A8; }
-    .bt-chip:hover { background: #EBDDBE; }
+    .bt-chip { background: #EEEAE0; color: var(--heading, #1e1714); font-family: var(--body); font-size: 0.8rem;
+      font-weight: 700; padding: 0.3rem 0.75rem; border-radius: 999px; border: 1px solid var(--warm, #B54939); }
+    .bt-chip:hover { background: #E4DFD5; }
     /* in-app modals (name a chat / saved-conversations list) — no native prompt()/alert() */
     /* Closed by default (display:none) so a closed modal never covers/intercepts the chat controls.
        Only the .show state lays it out — kept as its own class so nothing can override it away. */
-    .bb-modal { position: fixed; inset: 0; background: rgba(60, 40, 25, 0.35); display: none; align-items: center;
+    .bb-modal { position: fixed; inset: 0; background: rgba(30,23,20,.42); display: none; align-items: center;
       justify-content: center; padding: 1.25rem; z-index: 50; }
     .bb-modal.show { display: flex; }
-    .bb-modal-card { background: var(--card, #FFFDF5); border: 1px solid #E8D9A8; border-radius: 14px;
+    .bb-modal-card { background: var(--card, #F6F4EE); border: 1px solid #E4DFD5; border-radius: 14px;
       padding: 1rem 1.1rem; width: 100%; max-width: 340px; max-height: 80vh; overflow-y: auto; box-shadow: var(--shadow-sm); }
-    .bb-modal-card h4 { margin: 0 0 0.5rem; color: var(--heading, #5A3E2B); font-size: 1rem; }
+    .bb-modal-card h4 { margin: 0 0 0.5rem; color: var(--heading, #1e1714); font-size: 1rem; }
     .bb-modal-card input { width: 100%; margin: 0.2rem 0 0.7rem; }
     .bb-modal-actions { display: flex; gap: 0.5rem; }
     .bb-modal-actions button { flex: 1; border-radius: 999px; padding: 0.42rem 0.8rem; font-weight: 800;
@@ -117,10 +155,10 @@
     .bb-list-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem; }
     .bb-list-head h4 { margin: 0; }
     .bb-close { background: none; color: var(--muted); font-size: 1.05rem; padding: 0.2rem 0.4rem; }
-    .bb-conv { border: 1px solid #EFE7CB; border-radius: 10px; padding: 0.5rem 0.6rem; margin: 0.4rem 0; background: #FFF9EC; }
+    .bb-conv { border: 1px solid #E4DFD5; border-radius: 10px; padding: 0.5rem 0.6rem; margin: 0.4rem 0; background: #FDFCFA; }
     .bb-conv-row { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
     .bb-conv .open { flex: 1; text-align: left; background: none; padding: 0.15rem 0; border-radius: 8px; }
-    .bb-conv .cn { font-weight: 800; color: var(--heading, #5A3E2B); font-size: 0.9rem; }
+    .bb-conv .cn { font-weight: 800; color: var(--heading, #1e1714); font-size: 0.9rem; }
     .bb-conv .cm { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
     .bb-conv .del { background: none; color: #9a3a2c; font-size: 0.8rem; font-weight: 700; padding: 0.2rem 0.4rem; }
     .bb-empty { color: var(--muted); font-size: 0.85rem; font-style: italic; padding: 0.5rem 0; }
@@ -130,6 +168,9 @@
   <div class="topbar">
     <a class="back" id="back" href="index.html">← back</a>
   </div>
+  <button class="home-btn" id="homeBtn" type="button" aria-label="home" title="home">
+    <img src="home.svg" alt="home">
+  </button>
   <h1 class="wordmark"><img class="butter-logo" src="butter-logo.svg" alt="" style="height:1.05em;margin-right:.3em;vertical-align:-0.14em"> butter</h1>
   <p class="subtitle" id="subtitle">your baking science friend</p>
 
@@ -184,11 +225,41 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
+  <!-- Firestore + the saved-conversation cloud backup. On the STANDALONE full page butter's own
+       auth is reliable, so it talks to Firestore directly through this module. In the embedded
+       popup it relays through the parent page instead (see startConvSync below). -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <!-- Cloud Storage (where recipe photos live). The sync engine below needs it to start. Loaded here as a
+       normal tag, the same as the other pages: harmless inside the sheet, where nothing uses it. -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="firebase-init.js"></script>
+  <script src="bakebook-events.js"></script>   <!-- the event log: what people do, never what they wrote -->
+  <script>
+    // The sync engine (bakebook-store.js): the part that sends recipe saves to the cloud. On the FULL-SCREEN
+    // page butter saves recipes itself (an edit, a new recipe, a variation, a new part), so it needs the
+    // engine, the same as every other page. Inside the sheet (an iframe, a page shown inside another page)
+    // butter hands every save to the outer page, which already runs the engine. A second engine there would
+    // fight it, so it is left out. The test is the same one butter uses to pick where a save goes.
+    // Cloud Storage, which the engine needs, is already loaded above as a normal tag. document.write adds the
+    // engine right here, so it is running before butter's own code below. It is a file from this same site:
+    // browsers can refuse a document.write script from another site on a slow line, but not one from here.
+    (function () {
+      let inFrame = false;
+      try { inFrame = (window.parent && window.parent !== window); } catch (e) { inFrame = true; }
+      if (!inFrame) document.write('<script src="bakebook-store.js"><\/script>');
+    })();
+  </script>
+  <script src="bakebook-butter-sync.js"></script>
+  <script src="bakebook-back.js"></script>   <!-- Android back gesture: one step back, never quit -->
   <script>
     // ---- embed mode (shown inside the home popup) hides butter's own header ----
     const params = new URLSearchParams(location.search);
     if (params.get("embed")) document.body.classList.add("embed");
+    // "home" icon (top-right, hidden in embed): one tap back to home.
+    (function () { const hb = document.getElementById("homeBtn"); if (hb) hb.addEventListener("click", function () {
+      try { if (window.bakebookFlush) bakebookFlush(); } catch (e) {}
+      location.href = "index.html";
+    }); })();
 
     // ---- optional recipe context ----
     const id = params.get("id");
@@ -392,6 +463,48 @@
       return div;
     }
 
+    // ---- flag a bad butter answer -------------------------------------------------------------
+    // A quiet ⚑ under each real butter answer lets a baker report a poor response. One tap records the
+    // flag through the SAME backend butter chats use (kind:"flag"), so it works standalone AND embedded;
+    // then optional reason chips appear. Best-effort: a failed flag never interrupts the conversation.
+    function sendFlag(payload) {
+      return butterCall(Object.assign({ kind: "flag", recipeId: (recipe && recipe.id) || null }, payload))
+        .catch(function () { return null; });
+    }
+    function attachFlag(bubbleEl, text) {
+      if (!bubbleEl || bubbleEl.dataset.flagged) return;   // one control per bubble
+      bubbleEl.dataset.flagged = "1";
+      const bar = document.createElement("div");
+      bar.className = "flagbar";
+      const btn = document.createElement("button");
+      btn.className = "flagbtn"; btn.type = "button"; btn.textContent = "⚑";
+      btn.title = "flag this response";
+      btn.setAttribute("aria-label", "Flag this response as a bad answer");
+      bar.appendChild(btn);
+      bubbleEl.appendChild(bar);
+      btn.addEventListener("click", async function () {
+        btn.remove();
+        const done = document.createElement("span");
+        done.className = "flagdone"; done.textContent = "✓ flagged";
+        bar.appendChild(done);
+        const res = await sendFlag({ text: text });
+        const flagId = res && res.flagId;
+        const prompt = document.createElement("span");
+        prompt.className = "flagprompt"; prompt.textContent = "why?";
+        bar.appendChild(prompt);
+        ["wrong", "unhelpful", "off-topic"].forEach(function (reason) {
+          const chip = document.createElement("button");
+          chip.className = "flagchip"; chip.type = "button"; chip.textContent = reason;
+          chip.addEventListener("click", function () {
+            Array.prototype.forEach.call(bar.querySelectorAll(".flagchip"), function (c) { c.classList.remove("sel"); });
+            chip.classList.add("sel");
+            sendFlag({ flagId: flagId, reason: reason, text: text });
+          });
+          bar.appendChild(chip);
+        });
+      }, { once: true });
+    }
+
     // Pull-to-dismiss: the chat is an iframe, so a swipe in here can't reach the parent sheet on its own.
     // When embedded AND the chat is scrolled to the very top, a downward drag becomes a "close the sheet"
     // gesture — we forward it to the parent (which owns the sheet) so it peels down with slight resistance
@@ -447,9 +560,16 @@
       } catch (e) {}
     }
     // redraw the on-screen chat from displayThread (used on resume + when loading a saved conversation)
+    // A proposal entry rebuilds its live card (buttons + working handlers) if still un-answered, or a
+    // static "resolved" card if the baker already chose — so an open proposal survives a redraw and a
+    // finished one never re-offers its action.
     function renderThread() {
       messagesEl.innerHTML = "";
-      displayThread.forEach(function (m) { addMessage(m.role === "butter" ? "butter" : m.role, m.text); });
+      displayThread.forEach(function (m) {
+        if (m && m.role === "proposal") { renderProposalEntry(m); return; }
+        const el = addMessage(m.role === "butter" ? "butter" : m.role, m.text);
+        if (m.role === "butter") attachFlag(el, m.text);
+      });
     }
     // on load: restore this context's stored thread if there is one (NO server call, quota untouched); else greet
     function resumeOrGreet() {
@@ -465,6 +585,84 @@
     }
     function loadSaved() { try { return JSON.parse(localStorage.getItem(SAVED_KEY)) || []; } catch (e) { return []; } }
     function storeSaved(list) { try { localStorage.setItem(SAVED_KEY, JSON.stringify(list)); } catch (e) {} }
+
+    // ---- saved-conversation cloud backup (SAVED chats only; ongoing threads stay local) ----
+    // butter's SAVED/named conversations get the same cloud durability recipes have: each saved
+    // entry is backed up to Firestore (users/{uid}/butterConversations/{id}) and restored on any
+    // device or after a localStorage wipe. localStorage stays the fast working copy; the cloud is
+    // the backup. The live/ongoing threads (bakebook.butterThread.*) are deliberately NOT synced —
+    // tapping "save" is what makes a chat durable.
+    const SAVED_TOMB_KEY = "bakebook.butterSavedDeleted"; // ids deleted here but maybe not yet pushed
+    const SAVED_SEEN_KEY = "bakebook.butterSavedSeen";    // ids ever seen in the cloud (tells a brand-new
+                                                          // local chat from one deleted on another device)
+    function loadSavedTomb() { try { const t = JSON.parse(localStorage.getItem(SAVED_TOMB_KEY)); return Array.isArray(t) ? t : []; } catch (e) { return []; } }
+    function storeSavedTomb(ids) { try { localStorage.setItem(SAVED_TOMB_KEY, JSON.stringify(ids)); } catch (e) {} }
+    function loadSavedSeen() { try { const t = JSON.parse(localStorage.getItem(SAVED_SEEN_KEY)); return Array.isArray(t) ? t : []; } catch (e) { return []; } }
+    function storeSavedSeen(ids) { try { localStorage.setItem(SAVED_SEEN_KEY, JSON.stringify(ids)); } catch (e) {} }
+
+    // Raw cloud ops. When STANDALONE, butter's own auth + Firestore are reliable, so it writes
+    // directly through bakebook-butter-sync.js. When EMBEDDED in the popup, the iframe's own auth
+    // can be null, so it relays through the signed-in parent page (like every other butter call).
+    function cloudSaveConv(entry) {
+      if (!entry || !entry.id) return;
+      if (embedded) { try { window.parent.postMessage({ type: "bakebookButterConvSave", entry: entry }, "*"); } catch (e) {} }
+      else if (window.bakebookButterConvStore) { bakebookButterConvStore.save(entry).catch(function () {}); }
+    }
+    function cloudDeleteConv(sid) {
+      if (!sid) return;
+      if (embedded) { try { window.parent.postMessage({ type: "bakebookButterConvDelete", id: sid }, "*"); } catch (e) {} }
+      else if (window.bakebookButterConvStore) { bakebookButterConvStore.remove(sid).catch(function () {}); }
+    }
+    // Start pulling the cloud copy in. A live listener (like recipes') keeps devices in step; the
+    // parent relays snapshots back to the embedded popup. Signed-out/offline is a no-op — the local
+    // saved list keeps working and sync resumes when auth/connectivity returns.
+    let convSyncStarted = false;
+    function startConvSync() {
+      if (convSyncStarted) return;
+      convSyncStarted = true;
+      if (embedded) { try { window.parent.postMessage({ type: "bakebookButterConvSubscribe" }, "*"); } catch (e) {} }
+      else if (window.bakebookButterConvStore) { bakebookButterConvStore.subscribe(mergeCloudConversations); }
+    }
+
+    // Merge the cloud's saved conversations into the local saved list. Mirrors recipe sync:
+    // per conversation the most-recent updatedAt wins; a conversation only in the cloud is restored;
+    // a delete wins over a stale local copy (tombstones); and a local-only chat the cloud once held
+    // but dropped was deleted on another device (seen-set) so it's removed here too.
+    function mergeCloudConversations(cloudList) {
+      const localById = {}; loadSaved().forEach(function (e) { if (e && e.id) localById[e.id] = e; });
+      const cloudById = {}; (cloudList || []).forEach(function (e) { if (e && e.id) cloudById[e.id] = e; });
+      const tomb = loadSavedTomb();
+      const seen = loadSavedSeen();
+      const out = [];
+      const ids = {};
+      Object.keys(localById).forEach(function (id) { ids[id] = 1; });
+      Object.keys(cloudById).forEach(function (id) { ids[id] = 1; });
+      Object.keys(ids).forEach(function (id) {
+        const l = localById[id], c = cloudById[id];
+        if (tomb.indexOf(id) !== -1) {          // deleted here, maybe not yet pushed
+          if (c) cloudDeleteConv(id);           // cloud still has it → re-issue the delete
+          return;                               // stays deleted
+        }
+        if (l && c) {
+          if ((l.updatedAt || 0) > (c.updatedAt || 0)) { out.push(l); cloudSaveConv(l); }  // local edit newer → keep + push
+          else out.push(c);                     // cloud newer/equal → converge to it
+        } else if (c && !l) {
+          out.push(c);                          // in the cloud, missing here → restore it
+        } else if (l && !c) {
+          if (seen.indexOf(id) === -1) { out.push(l); cloudSaveConv(l); }  // brand-new local chat → keep + push
+          // else: cloud had it before and dropped it → deleted on another device → drop it here too
+        }
+      });
+      // remember every id the cloud currently holds, so a future local-only copy of a deleted chat is recognised
+      const newSeen = seen.slice();
+      Object.keys(cloudById).forEach(function (id) { if (newSeen.indexOf(id) === -1) newSeen.push(id); });
+      if (newSeen.length !== seen.length) storeSavedSeen(newSeen);
+      // a tombstoned chat the cloud no longer has = the delete is confirmed → forget the tombstone
+      const keptTomb = tomb.filter(function (id) { return !!cloudById[id]; });
+      if (keptTomb.length !== tomb.length) storeSavedTomb(keptTomb);
+      storeSaved(out);
+      if (convoList.classList.contains("show")) openListModal();   // redraw an open list so changes show at once
+    }
 
     // "new chat": clear the live thread + screen and greet fresh. A saved copy (if any) stays in the list.
     function newChat() {
@@ -510,6 +708,12 @@
         list.push(entry);
       }
       storeSaved(list);
+      // back the saved conversation up to the cloud (create OR re-save updates the same doc). Also
+      // clear any pending delete tombstone for this id — it's alive again.
+      const keptTomb = loadSavedTomb().filter(function (id) { return id !== activeSavedId; });
+      if (keptTomb.length !== loadSavedTomb().length) storeSavedTomb(keptTomb);
+      const saved = list.find(function (s) { return s.id === activeSavedId; });
+      if (saved) cloudSaveConv(saved);
       nameModal.classList.remove("show");
     }
 
@@ -556,6 +760,10 @@
     function deleteSaved(sid) {
       const list = loadSaved().filter(function (s) { return s.id !== sid; });
       storeSaved(list);
+      // remember the delete until the cloud confirms it, so a stale cloud copy (or an offline delete
+      // that hasn't pushed yet) can't resurrect it on the next sync. Then remove it from the cloud.
+      const tomb = loadSavedTomb(); if (tomb.indexOf(sid) === -1) { tomb.push(sid); storeSavedTomb(tomb); }
+      cloudDeleteConv(sid);
       if (activeSavedId === sid) activeSavedId = null;
       openListModal();
     }
@@ -584,7 +792,7 @@
     const embedded = (window.parent && window.parent !== window);
     const canEdit = !!recipe;                 // only offer editing when butter is looking at a recipe
     const canCreate = !recipe;                // the home chat (no recipe open) can SAVE a brand-new recipe
-    const canBranch = !!recipe && embedded;   // on a recipe page: butter can also add a part or spin off a variation
+    const canBranch = !!recipe;               // whenever a recipe is open (sheet OR full-screen): butter can also add a part or spin off a variation
     let pendingEditNote = "";                 // a short note handed to butter on the NEXT turn (applied / kept)
     let pendingApply = null;                  // the card + payload awaiting the parent's "applied" ack
     let pendingCreate = null;                 // the card awaiting the home page's "created" ack
@@ -624,17 +832,32 @@
     function variationOf(d) { return ((d && d.content) || []).find(function (b) { return b.type === "tool_use" && b.name === "create_variation"; }); }
     function editHasFields(inp) { return !!(inp && (Array.isArray(inp.ingredients) || Array.isArray(inp.steps) || (typeof inp.name === "string" && inp.name.trim()) || (typeof inp.description === "string"))); }
 
+    // Never show the baker a raw technical error (e.g. a bare "internal"/"unavailable" code or a Claude
+    // API string). Server messages written FOR the baker are full sentences — show those; anything short
+    // or code-like becomes a plain, friendly line.
+    function friendlyErr(err) {
+      const raw = (err && err.message) ? String(err.message).trim() : "";
+      if (raw && raw.length > 24 && /\s/.test(raw) && !/^functions\//.test(raw)) return raw;
+      return "butter couldn’t answer that one — give it another try in a moment.";
+    }
+
     async function send() {
       const text = inputEl.value.trim();
       if (text === "") return;
 
+      // the baker is moving on — any still-live "undo" links on earlier declines settle now: drop just the
+      // undo control, leaving the settled decline line (the proposal stays resolved/persisted).
+      Array.prototype.slice.call(messagesEl.querySelectorAll(".edit-undo")).forEach(function (u) { u.remove(); });
+
       addMessage("user", text);
+      if (window.bbLog) bbLog("butter_asked", { recipeId: recipe && recipe.id, kind: recipe ? "in_recipe" : "general" });
       // if butter just applied/kept an edit, quietly tell it so on this turn (not shown as a bubble)
       const sent = (pendingEditNote ? pendingEditNote + "\n\n" : "") + text;
       pendingEditNote = "";
       convo.push({ role: "user", content: sent });
       displayThread.push({ role: "user", text: text });   // persist what the baker SAW (not the edit-note-prefixed send)
       inputEl.value = "";
+      growInput();   // back to one line
       // tell the embedding recipe page the baker sent a message — this permanently stops butter's
       // first-run coach bounce. Harmless when running standalone (no embedding parent).
       if (window.parent && window.parent !== window) { try { window.parent.postMessage({ type: "bakebookButterMessageSent" }, "*"); } catch (e) {} }
@@ -683,21 +906,31 @@
           if (edit2) edit = edit2;   // prefer the clarified edit (now with the real arrays)
         }
 
+        // A tool call with no usable fields isn't a real answer — butter tried an action it couldn't
+        // actually complete. Drop it so we don't render a blank proposal card (which looked like butter
+        // going silent), and fall through to a helpful message instead.
+        if (edit && !editHasFields(edit.input)) edit = null;
         let create = createOf(data);
         let addComp = addCompOf(data);
         let variation = variationOf(data);
-        if (!fullText && !edit && !create && !addComp && !variation) addMessage("butter", "(butter had nothing to say)");
+        // butter must NEVER leave the baker with nothing. If there's no text and no usable action, say so
+        // plainly and point them to how to do it themselves.
+        const NO_RESPONSE = "sorry — i couldn’t do that one myself. tell me a bit more about what you’re trying to do and i’ll walk you through how to do it in bakebook, or try asking a different way.";
+        if (!fullText && !edit && !create && !addComp && !variation) { fullText = NO_RESPONSE; bubble = addMessage("butter", NO_RESPONSE); }
         // Record the assistant turn as PLAIN TEXT (never the raw tool_use) so the conversation stays valid
         // without sending a tool_result back — the edit/create is handled entirely in the app.
         const assistantText = fullText || (edit ? "here's an update i'd make to your recipe." : (create ? "here's a recipe i'd save for you." : (addComp ? "here's a new part i'd add to your recipe." : (variation ? "here's a variation i'd create." : ""))));
         convo.push({ role: "assistant", content: assistantText });
         // store a plain-text summary of butter's turn for re-render (restored action-cards aren't re-clickable — fine for v1)
         displayThread.push({ role: "butter", text: assistantText || "(butter had nothing to say)" });
+        if (bubble) attachFlag(bubble, assistantText);   // let the baker flag this answer if it's bad
 
-        if (edit) renderEditProposal(edit.input || {});
-        if (create) renderCreateProposal(create.input || {});
-        if (addComp) renderComponentProposal(addComp.input || {});
-        if (variation) renderVariationProposal(variation.input || {});
+        // Persist each proposal as a structured thread entry (not just text) so its card + live buttons
+        // survive a redraw (reopen / reload / embedded re-init) until the baker actually chooses.
+        if (edit) pushProposal("edit", edit.input || {});
+        if (create) pushProposal("create", create.input || {});
+        if (addComp) pushProposal("component", addComp.input || {});
+        if (variation) pushProposal("variation", variation.input || {});
         // trust the server's authoritative count when present; otherwise fall back to a local +1
         if (data && data.bbUsage) applyServerUsage(data.bbUsage);
         else setUsage(usageToday() + 1);   // counts ONE user message; the continuations above were free
@@ -711,9 +944,16 @@
           try { localStorage.setItem(USAGE_KEY, JSON.stringify({ day: new Date().toISOString().slice(0, 10), n: quotaLimit })); } catch (e) {}
           renderQuota();
         }
-        addMessage("error", emsg || "couldn't reach butter — try again in a moment.");
+        addMessage("error", friendlyErr(err));
       }
     }
+
+    // the box starts at one line and grows to fit what is typed; the CSS max-height caps it at 6 lines
+    function growInput() {
+      inputEl.style.height = "auto";                       // shrink first so deleting text shrinks the box too
+      inputEl.style.height = inputEl.scrollHeight + "px";
+    }
+    inputEl.addEventListener("input", growInput);
 
     document.getElementById("sendBtn").addEventListener("click", send);
     inputEl.addEventListener("keydown", function (e) {
@@ -722,6 +962,126 @@
 
     // ---- butter's "update recipe?" proposal (confirm-first: nothing changes until the baker taps apply) ----
     function ingText(i) { return ((i.amount || "") + " " + (i.unit || "") + " " + (i.name || "")).replace(/\s+/g, " ").trim(); }
+
+    // how many rows a proposal card shows before the "show all" toggle takes over
+    const ING_CAP = 8;    // create/add-part/variation cards: first 8 ingredients, rest (+ method) behind the toggle
+    const DIFF_CAP = 8;   // edit card: first ~8 change lines, rest behind the toggle
+
+    // A proposal lives in the thread as { role:"proposal", kind, input, status }. This creates a fresh
+    // (un-answered) one, records it so it survives a redraw, and draws its card.
+    function pushProposal(kind, input) {
+      const entry = { role: "proposal", kind: kind, input: input, status: "pending" };
+      displayThread.push(entry);
+      renderProposalEntry(entry);
+    }
+    // draw one persisted proposal entry — live card if still pending, static resolved card if answered
+    function renderProposalEntry(entry) {
+      if (!entry) return;
+      if (entry.kind === "edit") renderEditProposal(entry);
+      else if (entry.kind === "create") renderCreateProposal(entry);
+      else if (entry.kind === "component") renderComponentProposal(entry);
+      else if (entry.kind === "variation") renderVariationProposal(entry);
+    }
+    // A real, tappable two-way toggle. It ONLY shows/hides `extraEl` — it never touches the action
+    // buttons. preventDefault + stopPropagation so the tap can't bubble into anything that redraws.
+    function makeToggle(moreLabel, extraEl) {
+      const t = document.createElement("button");
+      t.type = "button"; t.className = "edit-more"; t.textContent = moreLabel;
+      t.addEventListener("click", function (ev) {
+        ev.preventDefault(); ev.stopPropagation();
+        const opening = extraEl.style.display === "none";
+        extraEl.style.display = opening ? "" : "none";
+        t.textContent = opening ? "show less" : moreLabel;
+      });
+      return t;
+    }
+    // For create/add-part/variation cards. SHORT proposals (≤8 ingredients AND ≤8 steps) render every
+    // ingredient AND every method step inline, with NO toggle — nothing is hidden, so a toggle would be
+    // pointless. Only a LONG proposal (>8 ingredients OR >8 steps) collapses: it shows the first 8
+    // ingredients (no steps) and tucks the rest — remaining ingredients AND the full method — behind a
+    // "show all / show less" toggle. (A recipe with ≤8 ingredients but >8 steps still collapses; the
+    // toggle then just reveals the steps.)
+    function appendIngSteps(meta, ings, steps) {
+      const addIng = function (box, i) { const d = document.createElement("div"); d.className = "add"; d.textContent = "+ " + ingText(i); box.appendChild(d); };
+      const addSteps = function (box) {
+        if (!steps.length) return;
+        const sl = document.createElement("span"); sl.className = "lbl"; sl.textContent = "method"; box.appendChild(sl);
+        steps.forEach(function (st, ix) { const d = document.createElement("div"); d.textContent = (ix + 1) + ". " + String(st); box.appendChild(d); });
+      };
+      const isLong = ings.length > ING_CAP || steps.length > ING_CAP;
+      if (!isLong) {   // short → show the whole recipe inline, no toggle
+        ings.forEach(function (i) { addIng(meta, i); });
+        addSteps(meta);
+        return;
+      }
+      // long → collapsed preview (first 8 ingredients, no steps) + a toggle that reveals the rest
+      ings.slice(0, ING_CAP).forEach(function (i) { addIng(meta, i); });
+      const extraIngs = ings.length - ING_CAP;
+      const extra = document.createElement("div"); extra.className = "edit-extra"; extra.style.display = "none";
+      if (extraIngs > 0) ings.slice(ING_CAP).forEach(function (i) { addIng(extra, i); });
+      addSteps(extra);
+      meta.appendChild(extra);
+      let moreLabel;
+      if (extraIngs > 0 && steps.length) moreLabel = "show full recipe (+" + extraIngs + " ingredient" + (extraIngs === 1 ? "" : "s") + " · " + steps.length + " step" + (steps.length === 1 ? "" : "s") + ")";
+      else if (extraIngs > 0) moreLabel = "show all " + ings.length + " ingredients";
+      else moreLabel = "show method (" + steps.length + " step" + (steps.length === 1 ? "" : "s") + ")";
+      meta.appendChild(makeToggle(moreLabel, extra));
+    }
+    // For the edit card: once all change rows are in `box`, keep the first ~cap visible and tuck the rest
+    // behind a toggle. Only moves content rows — the .edit-actions buttons live outside `box`, untouched.
+    function capDiff(box, cap, moreLabel) {
+      const rows = Array.prototype.slice.call(box.children);
+      if (rows.length <= cap) return;
+      const extra = document.createElement("div"); extra.className = "edit-extra"; extra.style.display = "none";
+      rows.slice(cap).forEach(function (r) { extra.appendChild(r); });   // moves them out of box into extra
+      box.appendChild(extra);
+      box.appendChild(makeToggle(moreLabel, extra));
+    }
+    // The static line an already-answered proposal shows on redraw (instead of live buttons)
+    function appendResolved(card, kind, status) {
+      let text = "", fail = false;
+      if (status === "applied") text = "✓ updated your recipe.";
+      else if (status === "saved") text = "✓ saved to your book.";
+      else if (status === "added") text = "✓ added the part.";
+      else if (status === "created") text = "✓ created the variation.";
+      else if (status === "kept") { text = "kept as-is."; fail = true; }
+      else if (status === "skipped") {
+        fail = true;
+        text = kind === "create" ? "not saved." : kind === "component" ? "not added." : kind === "variation" ? "not created." : "kept as-is.";
+      } else if (status === "failed") {
+        fail = true;
+        text = kind === "edit" ? "couldn't apply the change." : kind === "create" ? "couldn't save the recipe."
+             : kind === "component" ? "couldn't add the part." : "couldn't create the variation.";
+      } else { text = "done."; }
+      const d = document.createElement("p"); d.className = "edit-done" + (fail ? " fail" : ""); d.textContent = text; card.appendChild(d);
+    }
+    // Shared skip/decline handler for all four proposal cards. It settles the proposal as declined (final
+    // line + status + a "declined" note to butter) BUT leaves an inline "undo" beside the line so a mistap
+    // on the small skip button doesn't dead-end the flow. Undo restores the EXACT pre-skip state: the
+    // original skip/apply buttons come back (their listeners are still wired), the status goes back to
+    // "pending", and the decline note to butter is retracted. The undo link stays live until the baker
+    // sends their next message — send() then strips any remaining .edit-undo controls, leaving the settled
+    // line (a redraw/reload also settles it, since the persisted resolved status draws a static card).
+    function skipProposal(entry, card, actions, doneText, declineNote, declinedStatus) {
+      const priorNote = pendingEditNote;   // what butter would have been told BEFORE this skip
+      const priorStatus = entry.status;    // "pending"
+      actions.remove();
+      const d = document.createElement("p"); d.className = "edit-done fail"; d.textContent = doneText + " ";
+      const undo = document.createElement("button"); undo.type = "button"; undo.className = "edit-undo"; undo.textContent = "undo";
+      d.appendChild(undo);
+      card.appendChild(d);
+      entry.status = declinedStatus;
+      pendingEditNote = declineNote;
+      persistThread();
+      undo.addEventListener("click", function (ev) {
+        ev.preventDefault(); ev.stopPropagation();
+        d.remove();                    // drop the settled line + the undo control
+        card.appendChild(actions);     // bring the original skip/apply buttons back to their spot
+        entry.status = priorStatus;    // un-resolve → "pending" (live again, survives redraw with buttons)
+        pendingEditNote = priorNote;   // retract the "declined" note so butter isn't told the baker declined
+        persistThread();
+      });
+    }
     // a simple line-level diff: what's removed (in old, not new) and added (in new, not old)
     function diffLines(box, label, oldList, newList) {
       const oldS = oldList.map(String), newS = newList.map(String);
@@ -732,7 +1092,8 @@
       removed.forEach(function (t) { const d = document.createElement("div"); d.className = "rem"; d.textContent = "− " + t; box.appendChild(d); });
       added.forEach(function (t) { const d = document.createElement("div"); d.className = "add"; d.textContent = "+ " + t; box.appendChild(d); });
     }
-    function renderEditProposal(input) {
+    function renderEditProposal(entry) {
+      const input = entry.input || {};
       const card = document.createElement("div"); card.className = "edit-card";
       const h = document.createElement("h4"); h.textContent = "update recipe?"; card.appendChild(h);
       if (input.summary) { const s = document.createElement("p"); s.className = "es"; s.textContent = input.summary; card.appendChild(s); }
@@ -749,6 +1110,7 @@
         const l = document.createElement("span"); l.className = "lbl"; l.textContent = "description"; diff.appendChild(l);
         const d = document.createElement("div"); d.className = "add"; d.textContent = input.description; diff.appendChild(d);
       }
+      capDiff(diff, DIFF_CAP, "show all changes");   // long change lists collapse to ~8 rows + a toggle
       if (diff.children.length) card.appendChild(diff);
 
       // Did butter actually include concrete edits? If it only sent a summary (no ingredients/steps/name/
@@ -764,6 +1126,13 @@
         return;
       }
 
+      // already answered (redraw) → show the outcome, never re-offer live buttons
+      if (entry.status && entry.status !== "pending") {
+        appendResolved(card, "edit", entry.status);
+        messagesEl.appendChild(card); messagesEl.scrollTop = messagesEl.scrollHeight;
+        return;
+      }
+
       const actions = document.createElement("div"); actions.className = "edit-actions";
       const skip = document.createElement("button"); skip.className = "edit-skip"; skip.textContent = "skip";
       const apply = document.createElement("button"); apply.className = "edit-apply"; apply.textContent = "✓ apply";
@@ -771,17 +1140,21 @@
       messagesEl.appendChild(card); messagesEl.scrollTop = messagesEl.scrollHeight;
 
       skip.addEventListener("click", function () {
-        actions.remove();
-        const d = document.createElement("p"); d.className = "edit-done fail"; d.textContent = "kept as-is."; card.appendChild(d);
-        pendingEditNote = "[the baker chose not to apply that change — the recipe is unchanged.]";
+        // settle as declined but leave an inline "undo" so a mistap can be reversed (status "kept" so a
+        // redraw shows "kept as-is", not fresh buttons)
+        skipProposal(entry, card, actions, "kept as-is.", "[the baker chose not to apply that change — the recipe is unchanged.]", "kept");
       });
       apply.addEventListener("click", function () {
         apply.disabled = skip.disabled = true; apply.textContent = "applying…";
-        applyEdit(input, card, actions);
+        if (window.bbLog) bbLog("butter_change_approved", { recipeId: recipe && recipe.id, kind: "edit" });
+        entry.status = "applied";   // record the choice up front so a redraw can never re-fire apply
+        persistThread();
+        applyEdit(entry, card, actions);
       });
     }
     // build the change payload (normalized) and apply it — via the parent recipe page when embedded
-    function applyEdit(input, card, actions) {
+    function applyEdit(entry, card, actions) {
+      const input = entry.input || {};
       const payload = {};
       if (Array.isArray(input.ingredients)) payload.ingredients = input.ingredients.map(function (x) {
         return { amount: String(x.amount == null ? "" : x.amount), unit: String(x.unit || ""), name: String(x.name || "") };
@@ -791,21 +1164,23 @@
       if (typeof input.description === "string") payload.description = input.description;
 
       if (embedded) {
-        pendingApply = { card: card, actions: actions };
+        pendingApply = { card: card, actions: actions, entry: entry };
         window.parent.postMessage({ type: "bakebookButterEdit", edit: payload, comp: activeIdx }, "*");
         // safety net: if the parent never answers, don't leave the button stuck
         setTimeout(function () {
           if (pendingApply) { markApplied(false, "couldn't reach the recipe — try again from the recipe page."); }
         }, 5000);
       } else {
-        // standalone butter page (opened full-screen): apply straight to local storage; the recipe
-        // page will pick it up + sync on next load.
+        // standalone butter page (opened full-screen): apply straight to local storage. The sync engine
+        // sees that save and sends it to the cloud a moment later, with no other page needed.
         const ok = applyLocally(payload);
         actions.remove();
         const d = document.createElement("p"); d.className = "edit-done" + (ok ? "" : " fail");
         d.textContent = ok ? "✓ updated — reopen the recipe to see it." : "couldn't save the change.";
         card.appendChild(d);
+        entry.status = ok ? "applied" : "failed";
         pendingEditNote = ok ? "[the baker applied that change to the recipe.]" : "";
+        persistThread();
       }
     }
     function markApplied(ok, reason) {
@@ -814,8 +1189,10 @@
       const d = document.createElement("p"); d.className = "edit-done" + (ok ? "" : " fail");
       d.textContent = ok ? "✓ updated your recipe." : (reason || "couldn't apply the change.");
       pendingApply.card.appendChild(d);
+      if (pendingApply.entry) pendingApply.entry.status = ok ? "applied" : "failed";
       pendingEditNote = ok ? "[the baker applied that change to the recipe.]" : "";
       pendingApply = null;
+      persistThread();
     }
     // fallback path (standalone page only): write the change into the shared local recipe list
     function applyLocally(payload) {
@@ -851,7 +1228,8 @@
     }
 
     // ---- butter's "save as a new recipe?" proposal (home chat only; confirm-first — nothing saves until tapped) ----
-    function renderCreateProposal(input) {
+    function renderCreateProposal(entry) {
+      const input = entry.input || {};
       const card = document.createElement("div"); card.className = "edit-card";
       const h = document.createElement("h4"); h.textContent = "save as a new recipe?"; card.appendChild(h);
       const nm = document.createElement("p"); nm.className = "es"; nm.innerHTML = "<strong>" + esc(input.name || "untitled recipe") + "</strong>"; card.appendChild(nm);
@@ -870,9 +1248,15 @@
       const lbl = document.createElement("span"); lbl.className = "lbl";
       lbl.textContent = ings.length + " ingredient" + (ings.length === 1 ? "" : "s") + " · " + steps.length + " step" + (steps.length === 1 ? "" : "s");
       meta.appendChild(lbl);
-      ings.slice(0, 8).forEach(function (i) { const d = document.createElement("div"); d.className = "add"; d.textContent = "+ " + ingText(i); meta.appendChild(d); });
-      if (ings.length > 8) { const d = document.createElement("div"); d.className = "add"; d.textContent = "+ …and " + (ings.length - 8) + " more"; meta.appendChild(d); }
+      appendIngSteps(meta, ings, steps);   // 8 ingredients, then "show all" reveals the rest + full method
       card.appendChild(meta);
+
+      // already answered (redraw) → show the outcome, never re-offer live buttons
+      if (entry.status && entry.status !== "pending") {
+        appendResolved(card, "create", entry.status);
+        messagesEl.appendChild(card); messagesEl.scrollTop = messagesEl.scrollHeight;
+        return;
+      }
 
       const actions = document.createElement("div"); actions.className = "edit-actions";
       const skip = document.createElement("button"); skip.className = "edit-skip"; skip.textContent = "skip";
@@ -881,17 +1265,19 @@
       messagesEl.appendChild(card); messagesEl.scrollTop = messagesEl.scrollHeight;
 
       skip.addEventListener("click", function () {
-        actions.remove();
-        const d = document.createElement("p"); d.className = "edit-done fail"; d.textContent = "not saved."; card.appendChild(d);
-        pendingEditNote = "[the baker chose not to save that recipe.]";
+        skipProposal(entry, card, actions, "not saved.", "[the baker chose not to save that recipe.]", "skipped");
       });
       save.addEventListener("click", function () {
         save.disabled = skip.disabled = true; save.textContent = "saving…";
-        createRecipe(input, card, actions);
+        if (window.bbLog) bbLog("butter_change_approved", { recipeId: recipe && recipe.id, kind: "create" });
+        entry.status = "saved";   // record the choice up front so a redraw can never re-fire save
+        persistThread();
+        createRecipe(entry, card, actions);
       });
     }
     // build the new-recipe payload and create it — via the home page when embedded, else locally + open it
-    function createRecipe(input, card, actions) {
+    function createRecipe(entry, card, actions) {
+      const input = entry.input || {};
       const normIng = function (arr) { return (Array.isArray(arr) ? arr : []).map(function (x) {
         return { amount: String(x.amount == null ? "" : x.amount), unit: String(x.unit || ""), name: String(x.name || "") };
       }).filter(function (x) { return x.name; }); };
@@ -910,18 +1296,40 @@
         payload.steps = normSteps(input.steps);
       }
       if (embedded) {
-        pendingCreate = { card: card, actions: actions };
+        pendingCreate = { card: card, actions: actions, entry: entry };
         window.parent.postMessage({ type: "bakebookButterCreate", recipe: payload }, "*");
         // on success the home page navigates to the new recipe (this iframe is torn down); this only fires on failure
         setTimeout(function () { if (pendingCreate) markCreated(false, "couldn't reach bakebook — try again."); }, 6000);
       } else {
-        const id = createLocally(payload);
+        const newId = createLocally(payload);
         actions.remove();
-        const d = document.createElement("p"); d.className = "edit-done" + (id ? "" : " fail");
-        d.textContent = id ? "✓ saved to your book — opening it…" : "couldn't save the recipe.";
+        const d = document.createElement("p"); d.className = "edit-done" + (newId ? "" : " fail");
+        d.textContent = newId ? "✓ saved to your book — opening it…" : "couldn't save the recipe.";
         card.appendChild(d);
-        if (id) setTimeout(function () { location.href = "recipe.html?id=" + encodeURIComponent(id); }, 700);
+        if (entry) entry.status = newId ? "saved" : "failed";
+        persistThread();
+        if (newId) saveThenGo("recipe.html?id=" + encodeURIComponent(newId));
       }
+    }
+    // After a full-screen save that opens another page: send the save to the cloud first, then go.
+    // Leaving the page can cut off a save that is still on its way, so we wait for it, but never more
+    // than 2.5 seconds: offline, or on a slow line, we still go, and the sync engine's note on this
+    // device makes the next page send it. The 700ms minimum keeps "opening it…" readable, as before.
+    // If the engine is still getting its first copy from the cloud, a send can't start yet, so we wait for
+    // that first (bakebookWhenReady), then send.
+    function saveThenGo(url) {
+      const go = function () { location.href = url; };
+      let flushed = null;
+      if (window.bakebookFlush && window.bakebookWhenReady) {
+        flushed = new Promise(function (done) {
+          bakebookWhenReady(function () {
+            try { Promise.resolve(bakebookFlush()).then(done, done); } catch (e) { done(); }
+          });
+        });
+      }
+      const shown = new Promise(function (r) { setTimeout(r, 700); });
+      const cap = new Promise(function (r) { setTimeout(r, 2500); });
+      Promise.race([Promise.all([Promise.resolve(flushed), shown]), cap]).then(go, go);
     }
     function markCreated(ok, reason) {
       if (!pendingCreate) return;
@@ -929,7 +1337,9 @@
       const d = document.createElement("p"); d.className = "edit-done" + (ok ? "" : " fail");
       d.textContent = ok ? "✓ saved to your book." : (reason || "couldn't save the recipe.");
       pendingCreate.card.appendChild(d);
+      if (pendingCreate.entry) pendingCreate.entry.status = ok ? "saved" : "failed";
       pendingCreate = null;
+      persistThread();
     }
     // fallback path (standalone butter page): write a new recipe straight into the shared local list
     function createLocally(payload) {
@@ -950,15 +1360,85 @@
         }
         list.push(rec);
         localStorage.setItem("bakebook.recipes", JSON.stringify(list));
+        if (window.bbLog) bbLog("recipe_created", { recipeId: rec.id, kind: "butter" });
         return rec.id;
       } catch (e) { return null; }
+    }
+
+    // fallback path (standalone/full-screen butter): create a VARIATION locally — a SEPARATE new recipe
+    // linked to the open one via parentId, leaving the original UNTOUCHED. Mirrors recipe.html's
+    // bakebookButterCreateVariation handler so both entry points build the same shape.
+    function createVariationLocally(payload) {
+      try {
+        const p = payload || {};
+        const now = Date.now();
+        const normIng = function (arr) { return (Array.isArray(arr) ? arr : []).map(function (x) { return { amount: String(x.amount == null ? "" : x.amount), unit: String(x.unit || ""), name: String(x.name || "") }; }); };
+        const normSteps = function (arr) { return (Array.isArray(arr) ? arr : []).map(String); };
+        const variation = {
+          id: "r" + now + Math.random().toString(36).slice(2, 7),
+          parentId: recipe.id,
+          name: String(p.name || (recipe.name + " variation")),
+          description: (typeof p.description === "string" ? p.description : (recipe.description || "")),
+          category: recipe.category || "",
+          components: [], ingredients: [], steps: [], stepNotes: [], photos: [], logs: [],
+          createdAt: now, updatedAt: now
+        };
+        if (Array.isArray(p.components) && p.components.length) {
+          variation.components = p.components.map(function (cc) { return { name: String(cc.name || ""), ingredients: normIng(cc.ingredients), steps: normSteps(cc.steps), stepNotes: [] }; });
+        } else {
+          variation.components = [{ name: "", ingredients: normIng(p.ingredients), steps: normSteps(p.steps), stepNotes: [] }];
+        }
+        variation.components.forEach(function (cc) {   // flatten the mirror fields
+          (cc.ingredients || []).forEach(function (x) { variation.ingredients.push(x); });
+          (cc.steps || []).forEach(function (x) { variation.steps.push(x); });
+          (cc.stepNotes || []).forEach(function (x) { variation.stepNotes.push(x); });
+        });
+        const list = JSON.parse(localStorage.getItem("bakebook.recipes")) || [];
+        list.push(variation);   // the original recipe is left exactly as-is
+        localStorage.setItem("bakebook.recipes", JSON.stringify(list));
+        if (window.bbLog) bbLog("recipe_created", { recipeId: variation.id, kind: "butter_variation" });
+        return variation.id;
+      } catch (e) { return null; }
+    }
+
+    // fallback path (standalone/full-screen butter): add a whole new PART to the OPEN recipe locally.
+    // Mirrors recipe.html's bakebookButterAddComponent handler.
+    function addComponentLocally(payload) {
+      try {
+        const c = payload || {};
+        const list = JSON.parse(localStorage.getItem("bakebook.recipes")) || [];
+        const rec = list.find(function (r) { return r.id === recipe.id; });
+        if (!rec) return false;
+        const newComp = {
+          name: String(c.name || "new part"),
+          ingredients: (Array.isArray(c.ingredients) ? c.ingredients : []).map(function (x) { return { amount: String(x.amount == null ? "" : x.amount), unit: String(x.unit || ""), name: String(x.name || "") }; }),
+          steps: (Array.isArray(c.steps) ? c.steps : []).map(String),
+          stepNotes: []
+        };
+        if (!Array.isArray(rec.components) || !rec.components.length) {
+          // migrate a flat recipe into its first component, then append the new part
+          rec.components = [{ name: "", ingredients: rec.ingredients || [], steps: rec.steps || [], stepNotes: rec.stepNotes || [] }];
+        }
+        rec.components.push(newComp);
+        // keep the flattened mirror fields in sync (recipe.html rebuilds these on save; do it here too)
+        rec.ingredients = []; rec.steps = []; rec.stepNotes = [];
+        rec.components.forEach(function (cc) {
+          (cc.ingredients || []).forEach(function (x) { rec.ingredients.push(x); });
+          (cc.steps || []).forEach(function (x) { rec.steps.push(x); });
+          (cc.stepNotes || []).forEach(function (x) { rec.stepNotes.push(x); });
+        });
+        rec.updatedAt = Date.now();
+        localStorage.setItem("bakebook.recipes", JSON.stringify(list));
+        return true;
+      } catch (e) { return false; }
     }
 
     // ---- butter's "add a part?" and "create a variation?" proposals (recipe page only; confirm-first) ----
     let pendingComponent = null, pendingVariation = null;
 
     // add a whole new component/part to THIS recipe
-    function renderComponentProposal(input) {
+    function renderComponentProposal(entry) {
+      const input = entry.input || {};
       const card = document.createElement("div"); card.className = "edit-card";
       const h = document.createElement("h4"); h.textContent = "add a new part?"; card.appendChild(h);
       const nm = document.createElement("p"); nm.className = "es"; nm.innerHTML = "<strong>" + esc(input.name || "new part") + "</strong>"; card.appendChild(nm);
@@ -969,30 +1449,49 @@
       const lbl = document.createElement("span"); lbl.className = "lbl";
       lbl.textContent = ings.length + " ingredient" + (ings.length === 1 ? "" : "s") + " · " + steps.length + " step" + (steps.length === 1 ? "" : "s");
       meta.appendChild(lbl);
-      ings.slice(0, 8).forEach(function (i) { const d = document.createElement("div"); d.className = "add"; d.textContent = "+ " + ingText(i); meta.appendChild(d); });
-      if (ings.length > 8) { const d = document.createElement("div"); d.className = "add"; d.textContent = "+ …and " + (ings.length - 8) + " more"; meta.appendChild(d); }
+      appendIngSteps(meta, ings, steps);   // 8 ingredients, then "show all" reveals the rest + full method
       card.appendChild(meta);
+
+      // already answered (redraw) → show the outcome, never re-offer live buttons
+      if (entry.status && entry.status !== "pending") {
+        appendResolved(card, "component", entry.status);
+        messagesEl.appendChild(card); messagesEl.scrollTop = messagesEl.scrollHeight;
+        return;
+      }
+
       const actions = document.createElement("div"); actions.className = "edit-actions";
       const skip = document.createElement("button"); skip.className = "edit-skip"; skip.textContent = "skip";
       const add = document.createElement("button"); add.className = "edit-apply"; add.textContent = "✓ add part";
       actions.appendChild(skip); actions.appendChild(add); card.appendChild(actions);
       messagesEl.appendChild(card); messagesEl.scrollTop = messagesEl.scrollHeight;
       skip.addEventListener("click", function () {
-        actions.remove(); const d = document.createElement("p"); d.className = "edit-done fail"; d.textContent = "not added."; card.appendChild(d);
-        pendingEditNote = "[the baker chose not to add that part — the recipe is unchanged.]";
+        skipProposal(entry, card, actions, "not added.", "[the baker chose not to add that part — the recipe is unchanged.]", "skipped");
       });
       add.addEventListener("click", function () {
         add.disabled = skip.disabled = true; add.textContent = "adding…";
+        if (window.bbLog) bbLog("butter_change_approved", { recipeId: recipe && recipe.id, kind: "part" });
+        entry.status = "added";   // record the choice up front so a redraw can never re-fire add
+        persistThread();
         const payload = {
           name: String(input.name || "new part"),
           ingredients: (Array.isArray(input.ingredients) ? input.ingredients : []).map(function (x) { return { amount: String(x.amount == null ? "" : x.amount), unit: String(x.unit || ""), name: String(x.name || "") }; }).filter(function (x) { return x.name; }),
           steps: (Array.isArray(input.steps) ? input.steps : []).filter(function (s) { return s && String(s).trim(); }).map(String)
         };
         if (embedded) {
-          pendingComponent = { card: card, actions: actions };
+          pendingComponent = { card: card, actions: actions, entry: entry };
           window.parent.postMessage({ type: "bakebookButterAddComponent", component: payload }, "*");
           setTimeout(function () { if (pendingComponent) markComponent(false, "couldn't reach the recipe — try from the recipe page."); }, 5000);
-        } else { markComponent(false, "open this recipe to add a part."); }
+        } else {
+          // full-screen butter: add the part straight into the open recipe, then open it so the baker sees the change
+          const ok = addComponentLocally(payload);
+          actions.remove();
+          const d = document.createElement("p"); d.className = "edit-done" + (ok ? "" : " fail");
+          d.textContent = ok ? "✓ added the part — opening the recipe…" : "couldn't add the part.";
+          card.appendChild(d);
+          entry.status = ok ? "added" : "failed";
+          persistThread();
+          if (ok) saveThenGo("recipe.html?id=" + encodeURIComponent(recipe.id));
+        }
       });
     }
     function markComponent(ok, reason) {
@@ -1001,12 +1500,15 @@
       const d = document.createElement("p"); d.className = "edit-done" + (ok ? "" : " fail");
       d.textContent = ok ? "✓ added the part." : (reason || "couldn't add the part.");
       pendingComponent.card.appendChild(d);
+      if (pendingComponent.entry) pendingComponent.entry.status = ok ? "added" : "failed";
       pendingEditNote = ok ? "[the baker added that part to the recipe.]" : "";
       pendingComponent = null;
+      persistThread();
     }
 
     // create a VARIATION of this recipe (a separate new recipe linked to it)
-    function renderVariationProposal(input) {
+    function renderVariationProposal(entry) {
+      const input = entry.input || {};
       const card = document.createElement("div"); card.className = "edit-card";
       const h = document.createElement("h4"); h.textContent = "create a variation?"; card.appendChild(h);
       const nm = document.createElement("p"); nm.className = "es"; nm.innerHTML = "<strong>" + esc(input.name || "variation") + "</strong>"; card.appendChild(nm);
@@ -1020,30 +1522,49 @@
       const lbl = document.createElement("span"); lbl.className = "lbl";
       lbl.textContent = ings.length + " ingredient" + (ings.length === 1 ? "" : "s") + " · " + steps.length + " step" + (steps.length === 1 ? "" : "s");
       meta.appendChild(lbl);
-      ings.slice(0, 8).forEach(function (i) { const d = document.createElement("div"); d.className = "add"; d.textContent = "+ " + ingText(i); meta.appendChild(d); });
-      if (ings.length > 8) { const d = document.createElement("div"); d.className = "add"; d.textContent = "+ …and " + (ings.length - 8) + " more"; meta.appendChild(d); }
+      appendIngSteps(meta, ings, steps);   // 8 ingredients, then "show all" reveals the rest + full method
       card.appendChild(meta);
+
+      // already answered (redraw) → show the outcome, never re-offer live buttons
+      if (entry.status && entry.status !== "pending") {
+        appendResolved(card, "variation", entry.status);
+        messagesEl.appendChild(card); messagesEl.scrollTop = messagesEl.scrollHeight;
+        return;
+      }
+
       const actions = document.createElement("div"); actions.className = "edit-actions";
       const skip = document.createElement("button"); skip.className = "edit-skip"; skip.textContent = "skip";
       const make = document.createElement("button"); make.className = "edit-apply"; make.textContent = "✓ create variation";
       actions.appendChild(skip); actions.appendChild(make); card.appendChild(actions);
       messagesEl.appendChild(card); messagesEl.scrollTop = messagesEl.scrollHeight;
       skip.addEventListener("click", function () {
-        actions.remove(); const d = document.createElement("p"); d.className = "edit-done fail"; d.textContent = "not created."; card.appendChild(d);
-        pendingEditNote = "[the baker chose not to create that variation.]";
+        skipProposal(entry, card, actions, "not created.", "[the baker chose not to create that variation.]", "skipped");
       });
       make.addEventListener("click", function () {
         make.disabled = skip.disabled = true; make.textContent = "creating…";
+        if (window.bbLog) bbLog("butter_change_approved", { recipeId: recipe && recipe.id, kind: "variation" });
+        entry.status = "created";   // record the choice up front so a redraw can never re-fire create
+        persistThread();
         const normIng = function (arr) { return (Array.isArray(arr) ? arr : []).map(function (x) { return { amount: String(x.amount == null ? "" : x.amount), unit: String(x.unit || ""), name: String(x.name || "") }; }).filter(function (x) { return x.name; }); };
         const normSteps = function (arr) { return (Array.isArray(arr) ? arr : []).filter(function (s) { return s && String(s).trim(); }).map(String); };
         const payload = { name: String(input.name || "variation"), description: (typeof input.description === "string" ? input.description : "") };
         if (comps) { payload.components = comps.map(function (c) { return { name: String(c.name || ""), ingredients: normIng(c.ingredients), steps: normSteps(c.steps) }; }); }
         else { payload.ingredients = normIng(input.ingredients); payload.steps = normSteps(input.steps); }
         if (embedded) {
-          pendingVariation = { card: card, actions: actions };
+          pendingVariation = { card: card, actions: actions, entry: entry };
           window.parent.postMessage({ type: "bakebookButterCreateVariation", recipe: payload }, "*");
           setTimeout(function () { if (pendingVariation) markVariation(false, "couldn't reach the recipe — try again."); }, 6000);
-        } else { markVariation(false, "open this recipe to create a variation."); }
+        } else {
+          // full-screen butter: create the variation locally (new recipe linked via parentId), then open it
+          const newId = createVariationLocally(payload);
+          actions.remove();
+          const d = document.createElement("p"); d.className = "edit-done" + (newId ? "" : " fail");
+          d.textContent = newId ? "✓ created the variation — opening it…" : "couldn't create the variation.";
+          card.appendChild(d);
+          entry.status = newId ? "created" : "failed";
+          persistThread();
+          if (newId) saveThenGo("recipe.html?id=" + encodeURIComponent(newId));
+        }
       });
     }
     function markVariation(ok, reason) {
@@ -1052,7 +1573,9 @@
       const d = document.createElement("p"); d.className = "edit-done" + (ok ? "" : " fail");
       d.textContent = ok ? "✓ created the variation." : (reason || "couldn't create the variation.");
       pendingVariation.card.appendChild(d);
+      if (pendingVariation.entry) pendingVariation.entry.status = ok ? "created" : "failed";
       pendingVariation = null;
+      persistThread();
     }
 
     // the parent page answers here: for a relayed butter call, and for an applied/rejected edit
@@ -1063,6 +1586,8 @@
       if (m.type === "bakebookButterCreated") { markCreated(!!m.ok, m.reason); return; }
       if (m.type === "bakebookButterComponentAdded") { markComponent(!!m.ok, m.reason); return; }
       if (m.type === "bakebookButterVariationCreated") { markVariation(!!m.ok, m.reason); return; }
+      // the parent relays the cloud's saved-conversation list back here (embedded mode)
+      if (m.type === "bakebookButterConvSnapshot") { mergeCloudConversations(m.entries || []); return; }
       if (m.type === "bakebookButterResult" && _pendingCalls[m.cid]) {
         const p = _pendingCalls[m.cid]; delete _pendingCalls[m.cid];
         if (m.ok) p.resolve(m.data || {});
@@ -1087,10 +1612,11 @@
     // ---- first draw: reveal the chat once we know who's signed in ----
     let greeted = false;
     // embedded (popup): the parent handles auth, so show the chat + resume/greet right away
-    if (embedded) { showChat(true); resumeOrGreet(); greeted = true; }
+    if (embedded) { showChat(true); resumeOrGreet(); greeted = true; startConvSync(); }  // parent relays the cloud copy
     auth.onAuthStateChanged(function (user) {
       showChat(!!user);
       if (user && !greeted) { resumeOrGreet(); greeted = true; }
+      if (user) startConvSync();   // standalone: our own auth is ready → pull saved conversations from the cloud
       if (!authResolved) { authResolved = true; authReadyResolve(); }   // first check done — unblocks send()
     });
   </script>

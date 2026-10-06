@@ -1,0 +1,117 @@
+<!-- about.html — bakebook's public "what is this" page.
+     A standalone, no-login page: it is the home page URL given to Google's OAuth
+     consent-screen verification, which requires a publicly viewable page describing
+     the app. All content is in the HTML (no JS rendering) so a crawler can read it. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>bakebook — store. develop. bake.</title>
+  <meta name="description" content="bakebook is a recipe development and storage app. Keep your recipes in one place, scale them, log every bake, and develop the next version with an AI baking assistant.">
+  <link rel="stylesheet" href="styles.css?v=16">
+  <style>
+    body { margin: 0 auto; max-width: 680px; padding: calc(1.5rem + env(safe-area-inset-top, 0px)) 1.25rem 4rem; }
+    h1 { font-size: 2.2rem; margin: 0.25rem 0 0.1rem; }
+    .tagline { color: var(--teal); font-family: var(--display); font-size: 0.95rem;
+               letter-spacing: 0.06em; margin: 0 0 1.6rem; }
+    .tagline .bake { color: var(--warm); font-weight: 600; }
+    h2 { font-size: 1.2rem; margin: 2.2rem 0 0.5rem; color: var(--terracotta-deep); }
+    h3 { font-size: 1rem; margin: 1.2rem 0 0.3rem; }
+    p, li { line-height: 1.65; color: var(--ink); font-size: 0.98rem; }
+    .lede { font-size: 1.08rem; }
+    ul { padding-left: 1.2rem; }
+    li { margin-bottom: 0.5rem; }
+    a { color: var(--terracotta-deep); }
+    .rule { border: none; border-top: 1px solid var(--border); margin: 2.5rem 0; }
+    .note { background: var(--cream); border-radius: 10px; padding: 0.9rem 1rem;
+            font-size: 0.92rem; color: var(--muted); }
+    .cta { display: inline-block; background: var(--teal); color: var(--paper);
+           text-decoration: none; font-family: var(--display); font-weight: 600;
+           padding: 0.6rem 1.4rem; border-radius: 999px; margin: 0.4rem 0 0; }
+    .foot { margin-top: 2.5rem; font-size: 0.92rem; color: var(--muted); }
+    .foot a { margin-right: 0.9rem; }
+  </style>
+</head>
+<body>
+
+  <h1>bakebook</h1>
+  <p class="tagline">store. develop. <span class="bake">bake.</span></p>
+
+  <p class="lede">bakebook is a recipe development and storage app. Keep everything you bake in
+     one place, then use it as a workbench: change a ratio, log what happened, and build the next
+     version on what the last one taught you.</p>
+
+  <p><a class="cta" href="index.html">open bakebook</a></p>
+
+  <h2>What you can do with it</h2>
+
+  <h3>Store</h3>
+  <p>All your recipes in one list, or sorted into categories you name and photograph. Search
+     either one. Sort by what you looked at last, edited last, or bake most often.</p>
+
+  <h3>Develop</h3>
+  <p>Build a recipe out of parts. A layer cake can hold its cake, its frosting and its filling as
+     separate components, each with its own ingredients and method. Scale the whole thing to any
+     yield and switch between grams and cups, and every number follows.</p>
+
+  <h3>Bake</h3>
+  <p>Make-it mode walks you through the method one step at a time, sized for a screen you glance
+     at with flour on your hands.</p>
+
+  <h3>Log</h3>
+  <p>Every bake gets a log entry: what you changed, how it came out, what to try next. Your notes
+     live with the recipe, so the tenth version knows what the first one learned.</p>
+
+  <h3>Ask butter</h3>
+  <p>butter is an AI baking assistant that has already read the recipe you are looking at. Ask why
+     the crumb came out dense, what happens if you swap the sugar, or how to make a version without
+     eggs. butter can write a variation straight into your bakebook, or add a new component to the
+     recipe you are working on.</p>
+
+  <h3>Import and share</h3>
+  <p>Paste a link or photograph a page, and bakebook pulls the recipe into a structured form you
+     can edit and scale. Send any recipe as a link, and whoever opens it can read the whole thing
+     without an account.</p>
+
+  <h2>Where it runs</h2>
+  <p>bakebook runs in any modern web browser, and as an app on iPhone and iPad through the
+     <a href="https://apps.apple.com/us/app/bakebook-recipe-lab/id6791304387">App Store</a>. An Android version is in testing.</p>
+
+  <h2>Signing in, and what we do with your information</h2>
+  <p>bakebook needs an account so your recipes reach every device you use. You can create one with
+     an email address and password, or sign in with Google or Apple. When you use a social sign-in
+     we receive your name, email address and profile photo from that provider, and we use them only
+     to identify your account and show you who is signed in. We never post anything on your behalf,
+     and we never read anything else in your Google or Apple account.</p>
+  <p>Your recipes, photos, notes and bake logs are stored in your own account and are visible only
+     to you, unless you deliberately create a share link for a recipe. We do not sell your
+     information, show you ads, or use third-party advertising trackers.</p>
+  <p>The full detail, including every service provider we rely on and how to delete your account,
+     is in the <a href="privacy.html">privacy policy</a>.</p>
+
+  <h2>bakebook+</h2>
+  <p>bakebook is free to use. bakebook+ is an optional auto-renewing subscription that raises the
+     recipe limit and opens up butter. Pricing is always shown in the app before you buy, and you
+     can cancel any time through the app store you bought it from. The
+     <a href="privacy.html#terms">terms of use</a> spell out the details.</p>
+
+  <hr class="rule">
+
+  <h2>Contact</h2>
+  <p>Questions, problems, or anything about privacy: email
+     <a href="mailto:bakebook26@gmail.com">bakebook26@gmail.com</a>. A real person reads it.</p>
+
+  <p class="note">bakebook is made by Claire Mull, an independent developer. It is a personal
+     project built for people who bake the same thing more than once and want to make it better
+     each time.</p>
+
+  <p class="foot">
+    <a href="index.html">open bakebook</a>
+    <a href="https://apps.apple.com/us/app/bakebook-recipe-lab/id6791304387">get it on the App Store</a>
+    <a href="privacy.html">privacy policy</a>
+    <a href="privacy.html#terms">terms of use</a>
+  </p>
+
+</body>
+</html>
