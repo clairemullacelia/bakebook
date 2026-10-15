@@ -4,7 +4,7 @@
 
 <p><b>A recipe app for people who change their recipes.</b></p>
 
-<p><a href="https://apps.apple.com/us/app/bakebook-recipe-lab/id6791304387">App Store</a> · Google Play (rolling out) · <a href="https://bakebook.co">bakebook.co</a></p>
+<p><a href="https://apps.apple.com/us/app/bakebook-recipe-lab/id6791304387">App Store</a> · <a href="https://play.google.com/store/apps/details?id=com.clairemull.bakebook">Google Play</a> · <a href="https://bakebook.co">bakebook.co</a></p>
 
 </div>
 
@@ -33,7 +33,7 @@ bakebook is free, with an optional subscription (bakebook+) for more recipes and
 | Platform | State |
 |---|---|
 | iOS | Live on the [App Store](https://apps.apple.com/us/app/bakebook-recipe-lab/id6791304387) since September 2026 |
-| Android | Submitted to Google Play production, rolling out |
+| Android | Live on [Google Play](https://play.google.com/store/apps/details?id=com.clairemull.bakebook) since October 2026 |
 | Web | [bakebook.co](https://bakebook.co) |
 
 ## Screenshots
